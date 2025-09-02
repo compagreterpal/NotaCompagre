@@ -1,0 +1,13 @@
+# Supabase Configuration
+# Dapatkan dari: https://supabase.com/dashboard
+SUPABASE_URL=your_supabase_url_here
+SUPABASE_KEY=your_supabase_anon_key_here
+
+# Flask Configuration
+SECRET_KEY=your-super-secret-key-change-this
+FLASK_DEBUG=True
+
+# Cara pakai:
+# 1. Copy file ini dan rename jadi .env
+# 2. Isi dengan nilai yang sebenarnya
+# 3. Jangan share file .env ke orang lain!

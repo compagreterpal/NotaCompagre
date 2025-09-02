@@ -1,0 +1,254 @@
+{% extends "base.html" %}
+
+{% block title %}Setup Database - Nota Perusahaan{% endblock %}
+
+{% block content %}
+<div class="row justify-content-center">
+    <div class="col-lg-8">
+        <!-- Setup Header -->
+        <div class="text-center mb-5">
+            <h1 class="text-primary">
+                <i class="fas fa-cog me-2"></i>Setup Database
+            </h1>
+            <p class="text-muted">Konfigurasi database Supabase untuk sinkronisasi real-time</p>
+        </div>
+
+        <!-- Setup Steps -->
+        <div class="card shadow-sm mb-4">
+            <div class="card-header bg-primary text-white">
+                <h5 class="card-title mb-0">
+                    <i class="fas fa-list-ol me-2"></i>Langkah Setup
+                </h5>
+            </div>
+            <div class="card-body">
+                <div class="row">
+                    <div class="col-md-6">
+                        <h6 class="text-primary">1. Buat Akun Supabase</h6>
+                        <ol class="small">
+                            <li>Buka <a href="https://supabase.com" target="_blank" class="text-decoration-none">supabase.com</a></li>
+                            <li>Klik "Start your project"</li>
+                            <li>Sign up dengan GitHub atau email</li>
+                            <li>Verifikasi email Anda</li>
+                        </ol>
+                    </div>
+                    <div class="col-md-6">
+                        <h6 class="text-primary">2. Buat Project Baru</h6>
+                        <ol class="small">
+                            <li>Klik "New Project"</li>
+                            <li>Pilih organization</li>
+                            <li>Beri nama project (misal: "nota-perusahaan")</li>
+                            <li>Buat database password yang kuat</li>
+                            <li>Pilih region terdekat (Singapore)</li>
+                            <li>Klik "Create new project"</li>
+                        </ol>
+                    </div>
+                </div>
+                
+                <div class="row mt-3">
+                    <div class="col-md-6">
+                        <h6 class="text-primary">3. Dapatkan API Keys</h6>
+                        <ol class="small">
+                            <li>Setelah project selesai, buka "Settings" → "API"</li>
+                            <li>Copy "Project URL"</li>
+                            <li>Copy "anon public" key</li>
+                            <li>Simpan kedua informasi ini</li>
+                        </ol>
+                    </div>
+                    <div class="col-md-6">
+                        <h6 class="text-primary">4. Setup Database Schema</h6>
+                        <ol class="small">
+                            <li>Buka "SQL Editor" di sidebar</li>
+                            <li>Copy dan paste SQL script yang ada di bawah</li>
+                            <li>Klik "Run" untuk menjalankan</li>
+                        </ol>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Database Schema -->
+        <div class="card shadow-sm mb-4">
+            <div class="card-header bg-success text-white">
+                <h5 class="card-title mb-0">
+                    <i class="fas fa-database me-2"></i>Database Schema
+                </h5>
+            </div>
+            <div class="card-body">
+                <p class="text-muted mb-3">
+                    Copy script SQL berikut dan jalankan di SQL Editor Supabase:
+                </p>
+                <div class="bg-dark text-light p-3 rounded">
+                    <pre class="mb-0"><code>-- Create receipts table
+CREATE TABLE receipts (
+    id BIGSERIAL PRIMARY KEY,
+    receipt_number VARCHAR(20) NOT NULL,
+    company_code VARCHAR(10) NOT NULL,
+    company_name VARCHAR(100) NOT NULL,
+    date DATE NOT NULL,
+    recipient VARCHAR(100) NOT NULL,
+    total_amount DECIMAL(15,2) NOT NULL,
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+);
+
+-- Create items table
+CREATE TABLE items (
+    id BIGSERIAL PRIMARY KEY,
+    receipt_id BIGINT REFERENCES receipts(id) ON DELETE CASCADE,
+    quantity VARCHAR(50) NOT NULL,
+    item_type VARCHAR(100) NOT NULL,
+    size VARCHAR(50),
+    color VARCHAR(50),
+    unit_price DECIMAL(15,2) NOT NULL,
+    total_price DECIMAL(15,2) NOT NULL,
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+);
+
+-- Create indexes for better performance
+CREATE INDEX idx_receipts_company_code ON receipts(company_code);
+CREATE INDEX idx_receipts_date ON receipts(date);
+CREATE INDEX idx_receipts_created_at ON receipts(created_at);
+CREATE INDEX idx_items_receipt_id ON items(receipt_id);
+
+-- Enable Row Level Security (RLS)
+ALTER TABLE receipts ENABLE ROW LEVEL SECURITY;
+ALTER TABLE items ENABLE ROW LEVEL SECURITY;
+
+-- Create policies for public access (for demo purposes)
+CREATE POLICY "Allow public access to receipts" ON receipts FOR ALL USING (true);
+CREATE POLICY "Allow public access to items" ON items FOR ALL USING (true);</code></pre>
+                </div>
+                <div class="mt-3">
+                    <button class="btn btn-outline-success btn-sm" id="copySchemaBtn">
+                        <i class="fas fa-copy me-1"></i>Copy SQL Script
+                    </button>
+                </div>
+            </div>
+        </div>
+
+        <!-- Configuration Form -->
+        <div class="card shadow-sm mb-4">
+            <div class="card-header bg-info text-white">
+                <h5 class="card-title mb-0">
+                    <i class="fas fa-key me-2"></i>Konfigurasi API
+                </h5>
+            </div>
+            <div class="card-body">
+                <form id="configForm">
+                    <div class="mb-3">
+                        <label for="supabaseUrl" class="form-label">
+                            <i class="fas fa-link me-1"></i>Project URL
+                        </label>
+                        <input type="url" class="form-control" id="supabaseUrl" 
+                               placeholder="https://your-project.supabase.co" required>
+                        <div class="form-text">URL project Supabase Anda</div>
+                    </div>
+                    
+                    <div class="mb-3">
+                        <label for="supabaseKey" class="form-label">
+                            <i class="fas fa-key me-1"></i>Anon Public Key
+                        </label>
+                        <input type="text" class="form-control" id="supabaseKey" 
+                               placeholder="eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9..." required>
+                        <div class="form-text">Public key dari project Supabase Anda</div>
+                    </div>
+                    
+                    <div class="mb-3">
+                        <label for="secretKey" class="form-label">
+                            <i class="fas fa-shield-alt me-1"></i>Secret Key (Opsional)
+                        </label>
+                        <input type="text" class="form-control" id="secretKey" 
+                               placeholder="Random string untuk keamanan">
+                        <div class="form-text">Kosongkan untuk menggunakan default</div>
+                    </div>
+                    
+                    <div class="d-grid">
+                        <button type="submit" class="btn btn-primary">
+                            <i class="fas fa-save me-1"></i>Simpan Konfigurasi
+                        </button>
+                    </div>
+                </form>
+            </div>
+        </div>
+
+        <!-- Test Connection -->
+        <div class="card shadow-sm mb-4">
+            <div class="card-header bg-warning text-dark">
+                <h5 class="card-title mb-0">
+                    <i class="fas fa-plug me-2"></i>Test Koneksi
+                </h5>
+            </div>
+            <div class="card-body">
+                <p class="text-muted mb-3">
+                    Setelah menyimpan konfigurasi, test koneksi ke database:
+                </p>
+                <button class="btn btn-warning" id="testConnectionBtn">
+                    <i class="fas fa-wifi me-1"></i>Test Koneksi Database
+                </button>
+                
+                <div id="connectionResult" class="mt-3" style="display: none;">
+                    <!-- Result will be shown here -->
+                </div>
+            </div>
+        </div>
+
+        <!-- Current Configuration -->
+        <div class="card shadow-sm">
+            <div class="card-header bg-secondary text-white">
+                <h5 class="card-title mb-0">
+                    <i class="fas fa-info-circle me-2"></i>Konfigurasi Saat Ini
+                </h5>
+            </div>
+            <div class="card-body">
+                <div id="currentConfig">
+                    <p class="text-muted">Konfigurasi belum diatur.</p>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Success Modal -->
+<div class="modal fade" id="successModal" tabindex="-1">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header bg-success text-white">
+                <h5 class="modal-title">
+                    <i class="fas fa-check-circle me-1"></i>Berhasil!
+                </h5>
+                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <p>Konfigurasi berhasil disimpan!</p>
+                <p class="text-muted small">Database siap digunakan untuk sinkronisasi real-time.</p>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-success" data-bs-dismiss="modal">OK</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Error Modal -->
+<div class="modal fade" id="errorModal" tabindex="-1">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header bg-danger text-white">
+                <h5 class="modal-title">
+                    <i class="fas fa-exclamation-triangle me-1"></i>Error!
+                </h5>
+                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <p id="errorMessage">Terjadi kesalahan saat menyimpan konfigurasi.</p>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-danger" data-bs-dismiss="modal">OK</button>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script src="{{ url_for('static', filename='js/setup.js') }}"></script>
+{% endblock %}
