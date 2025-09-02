@@ -1,9 +1,23 @@
 // History page JavaScript for viewing receipts
 
 document.addEventListener('DOMContentLoaded', () => {
-    initializeHistory();
-    setupEventListeners();
-    loadReceipts();
+    try {
+        // Wait for main.js to load and initialize NotaApp
+        const waitForNotaApp = () => {
+            if (window.NotaApp) {
+                initializeHistory();
+                setupEventListeners();
+                loadReceipts();
+            } else {
+                // Wait a bit more for main.js to load
+                setTimeout(waitForNotaApp, 100);
+            }
+        };
+        
+        waitForNotaApp();
+    } catch (error) {
+        console.error('Error initializing history page:', error);
+    }
 });
 
 let allReceipts = [];
@@ -66,7 +80,9 @@ function debounce(func, wait) {
 
 async function loadReceipts() {
     try {
-        showLoading();
+        if (window.NotaApp && window.NotaApp.showLoading) {
+            window.NotaApp.showLoading();
+        }
         
         const response = await fetch('/api/receipts');
         const data = await response.json();
@@ -84,9 +100,15 @@ async function loadReceipts() {
         
     } catch (error) {
         console.error('Error loading receipts:', error);
-        window.NotaApp.showError('Error saat memuat data nota');
+        if (window.NotaApp && window.NotaApp.showError) {
+            window.NotaApp.showError('Error saat memuat data nota');
+        } else {
+            console.error('Error saat memuat data nota');
+        }
     } finally {
-        hideLoading();
+        if (window.NotaApp && window.NotaApp.hideLoading) {
+            window.NotaApp.hideLoading();
+        }
     }
 }
 
@@ -146,7 +168,9 @@ function updateReceiptsTable() {
     const pageReceipts = filteredReceipts.slice(startIndex, endIndex);
     
     if (pageReceipts.length === 0) {
-        showNoDataMessage();
+        if (window.NotaApp && window.NotaApp.showNoDataMessage) {
+            window.NotaApp.showNoDataMessage();
+        }
         return;
     }
     
@@ -159,9 +183,9 @@ function updateReceiptsTable() {
                 <strong>${receipt.receipt_number}</strong><br>
                 <small class="text-muted">${receipt.company_name}</small>
             </td>
-            <td>${window.NotaApp.formatDate(receipt.date)}</td>
-            <td>${receipt.recipient}</td>
-            <td class="fw-bold">${window.NotaApp.formatCurrency(receipt.total_amount)}</td>
+                            <td>${window.NotaApp && window.NotaApp.formatDate ? window.NotaApp.formatDate(receipt.date) : receipt.date}</td>
+                <td>${receipt.recipient}</td>
+                <td class="fw-bold">${window.NotaApp && window.NotaApp.formatCurrency ? window.NotaApp.formatCurrency(receipt.total_amount) : `Rp ${receipt.total_amount}`}</td>
             <td>
                 <span class="badge bg-success">Tersimpan</span>
             </td>
@@ -179,7 +203,9 @@ function updateReceiptsTable() {
         tbody.appendChild(row);
     });
     
-    hideNoDataMessage();
+    if (window.NotaApp && window.NotaApp.hideNoDataMessage) {
+        window.NotaApp.hideNoDataMessage();
+    }
 }
 
 function updatePagination() {
@@ -243,7 +269,11 @@ async function viewReceiptDetails(receiptId) {
         
     } catch (error) {
         console.error('Error loading receipt details:', error);
-        window.NotaApp.showError('Error saat memuat detail nota');
+        if (window.NotaApp && window.NotaApp.showError) {
+            window.NotaApp.showError('Error saat memuat detail nota');
+        } else {
+            console.error('Error saat memuat detail nota');
+        }
     }
 }
 
@@ -254,9 +284,9 @@ function showReceiptDetailsModal(receipt) {
     // Update modal content
     document.getElementById('modalReceiptNumber').textContent = receipt.receipt_number;
     document.getElementById('modalCompanyName').textContent = receipt.company_name;
-    document.getElementById('modalDate').textContent = window.NotaApp.formatDate(receipt.date);
+    document.getElementById('modalDate').textContent = window.NotaApp && window.NotaApp.formatDate ? window.NotaApp.formatDate(receipt.date) : receipt.date;
     document.getElementById('modalRecipient').textContent = receipt.recipient;
-    document.getElementById('modalTotalAmount').textContent = window.NotaApp.formatCurrency(receipt.total_amount);
+    document.getElementById('modalTotalAmount').textContent = window.NotaApp && window.NotaApp.formatCurrency ? window.NotaApp.formatCurrency(receipt.total_amount) : `Rp ${receipt.total_amount}`;
     
     // Update items table
     const itemsTbody = document.getElementById('modalItemsTableBody');
@@ -267,8 +297,8 @@ function showReceiptDetailsModal(receipt) {
                 <td>${item.item_type}</td>
                 <td>${item.size}</td>
                 <td>${item.color}</td>
-                <td>${window.NotaApp.formatCurrency(item.unit_price)}</td>
-                <td>${window.NotaApp.formatCurrency(item.total_price)}</td>
+                                        <td>${window.NotaApp && window.NotaApp.formatCurrency ? window.NotaApp.formatCurrency(item.unit_price) : `Rp ${item.unit_price}`}</td>
+                        <td>${window.NotaApp && window.NotaApp.formatCurrency ? window.NotaApp.formatCurrency(item.total_price) : `Rp ${item.total_price}`}</td>
             </tr>
         `).join('');
     }
@@ -281,7 +311,9 @@ function showReceiptDetailsModal(receipt) {
 function printReceipt(receiptId) {
     try {
         // Show loading
-        window.NotaApp.showToast('Membuat PDF...', 'info');
+        if (window.NotaApp && window.NotaApp.showToast) {
+            window.NotaApp.showToast('Membuat PDF...', 'info');
+        }
         
         // Download PDF
         const link = document.createElement('a');
@@ -293,19 +325,27 @@ function printReceipt(receiptId) {
         
         // Show success message
         setTimeout(() => {
-            window.NotaApp.showToast('PDF berhasil dibuat dan didownload!', 'success');
+            if (window.NotaApp && window.NotaApp.showToast) {
+                window.NotaApp.showToast('PDF berhasil dibuat dan didownload!', 'success');
+            }
         }, 1000);
         
     } catch (error) {
         console.error('Error generating PDF:', error);
-        window.NotaApp.showError('Error saat membuat PDF');
+        if (window.NotaApp && window.NotaApp.showError) {
+            window.NotaApp.showError('Error saat membuat PDF');
+        } else {
+            console.error('Error saat membuat PDF');
+        }
     }
 }
 
 async function handleExport() {
     try {
         const confirmBtn = document.getElementById('confirmExportBtn');
-        showLoading(confirmBtn);
+        if (window.NotaApp && window.NotaApp.showLoading) {
+            window.NotaApp.showLoading(confirmBtn);
+        }
         
         const response = await fetch('/api/export', {
             method: 'POST',
@@ -321,7 +361,9 @@ async function handleExport() {
         }
         
         // Success
-        window.NotaApp.showToast(data.message, 'success');
+        if (window.NotaApp && window.NotaApp.showToast) {
+            window.NotaApp.showToast(data.message, 'success');
+        }
         
         // Hide modal
         const exportModal = bootstrap.Modal.getInstance(document.getElementById('exportModal'));
@@ -336,48 +378,24 @@ async function handleExport() {
         
     } catch (error) {
         console.error('Error exporting data:', error);
-        window.NotaApp.showError(`Error saat export: ${error.message}`);
+        if (window.NotaApp && window.NotaApp.showError) {
+            window.NotaApp.showError(`Error saat export: ${error.message}`);
+        } else {
+            console.error(`Error saat export: ${error.message}`);
+        }
     } finally {
         const confirmBtn = document.getElementById('confirmExportBtn');
-        hideLoading(confirmBtn);
+        if (window.NotaApp && window.NotaApp.hideLoading) {
+            window.NotaApp.hideLoading(confirmBtn);
+        }
     }
 }
 
-// Utility functions
-function showLoading(targetElement = null) {
-    const loadingSpinner = document.getElementById('loadingSpinner');
-    const receiptsTable = document.getElementById('receiptsTable');
-    
-    if (loadingSpinner) loadingSpinner.style.display = 'block';
-    if (receiptsTable) receiptsTable.style.display = 'none';
-    if (targetElement) targetElement.disabled = true;
-}
+// Utility functions - ONLY use window.NotaApp, NO LOCAL DECLARATIONS
+// This prevents duplicate function declarations
 
-function hideLoading(targetElement = null) {
-    const loadingSpinner = document.getElementById('loadingSpinner');
-    const receiptsTable = document.getElementById('receiptsTable');
-    
-    if (loadingSpinner) loadingSpinner.style.display = 'none';
-    if (receiptsTable) receiptsTable.style.display = 'block';
-    if (targetElement) targetElement.disabled = false;
-}
-
-function showNoDataMessage() {
-    const noDataMessage = document.getElementById('noDataMessage');
-    const receiptsTable = document.getElementById('receiptsTable');
-    
-    if (noDataMessage) noDataMessage.style.display = 'block';
-    if (receiptsTable) receiptsTable.style.display = 'none';
-}
-
-function hideNoDataMessage() {
-    const noDataMessage = document.getElementById('noDataMessage');
-    const receiptsTable = document.getElementById('receiptsTable');
-    
-    if (noDataMessage) noDataMessage.style.display = 'none';
-    if (receiptsTable) receiptsTable.style.display = 'block';
-}
+// All functions are now accessed through window.NotaApp
+// No more SyntaxError: Identifier has already been declared
 
 // Using formatCurrency and formatDate from main.js
-
 // Using showError and showToast from main.js

@@ -1,9 +1,23 @@
 // Index page JavaScript for receipt form
 
 document.addEventListener('DOMContentLoaded', () => {
-    initializeForm();
-    setupEventListeners();
-    loadInitialData();
+    try {
+        // Wait for main.js to load and initialize NotaApp
+        const waitForNotaApp = () => {
+            if (window.NotaApp) {
+                initializeForm();
+                setupEventListeners();
+                loadInitialData();
+            } else {
+                // Wait a bit more for main.js to load
+                setTimeout(waitForNotaApp, 100);
+            }
+        };
+        
+        waitForNotaApp();
+    } catch (error) {
+        console.error('Error initializing index page:', error);
+    }
 });
 
 let currentCompany = '';
@@ -56,7 +70,11 @@ function setupEventListeners() {
     if (exportBtn) {
         exportBtn.addEventListener('click', () => {
             if (confirm('Export dan reset database? Data akan dihapus setelah export.')) {
-                exportToExcel();
+                if (window.NotaApp && window.NotaApp.exportToExcel) {
+                    window.NotaApp.exportToExcel();
+                } else {
+                    console.error('exportToExcel function not found');
+                }
             }
         });
     }
@@ -91,54 +109,83 @@ function setupEventListeners() {
 }
 
 function loadInitialData() {
-    // Load recipient history
-    if (window.NotaApp && window.NotaApp.loadRecipientHistory) {
-        window.NotaApp.loadRecipientHistory();
-    }
-    
-    // Update database stats
-    if (window.NotaApp && window.NotaApp.updateDatabaseStats) {
-        window.NotaApp.updateDatabaseStats();
+    try {
+        // Load recipient history
+        if (window.NotaApp && window.NotaApp.loadRecipientHistory) {
+            window.NotaApp.loadRecipientHistory();
+        }
+        
+        // Update database stats
+        if (window.NotaApp && window.NotaApp.updateDatabaseStats) {
+            window.NotaApp.updateDatabaseStats();
+        }
+    } catch (error) {
+        console.error('Error loading initial data:', error);
     }
 }
 
 function onCompanyChange(event) {
-    const companyCode = event.target.value;
-    currentCompany = companyCode;
-    
-    if (companyCode) {
-        // Generate receipt number
-        generateReceiptNumber(companyCode);
+    try {
+        const companyCode = event.target.value;
+        currentCompany = companyCode;
         
-        // Show/hide tax fields based on company
-        const taxFields = document.getElementById('taxFields');
-        const discountFields = document.getElementById('discountFields');
-        
-        if (companyCode === 'CH') {
-            // PT. CHASTE GEMILANG MANDIRI - show tax fields
-            if (taxFields) taxFields.style.display = 'flex';
-            if (discountFields) discountFields.style.display = 'none';
+        if (companyCode) {
+            // Generate receipt number safely
+            try {
+                generateReceiptNumber(companyCode);
+            } catch (receiptError) {
+                console.warn('Error generating receipt number:', receiptError);
+            }
+            
+            // Show/hide tax fields safely
+            try {
+                const taxFields = document.getElementById('taxFields');
+                const discountFields = document.getElementById('discountFields');
+                
+                if (companyCode === 'CH') {
+                    // PT. CHASTE GEMILANG MANDIRI - show tax fields
+                    if (taxFields) taxFields.style.display = 'flex';
+                    if (discountFields) discountFields.style.display = 'none';
+                } else {
+                    // Other companies - show discount/DP fields
+                    if (taxFields) taxFields.style.display = 'none';
+                    if (discountFields) discountFields.style.display = 'flex';
+                }
+            } catch (fieldsError) {
+                console.warn('Error showing/hiding fields:', fieldsError);
+            }
+            
+            // Update total calculation safely
+            try {
+                updateTotal();
+            } catch (totalError) {
+                console.warn('Error updating total:', totalError);
+            }
         } else {
-            // Other companies - show discount/DP fields
-            if (taxFields) taxFields.style.display = 'none';
-            if (discountFields) discountFields.style.display = 'flex';
+            // Clear receipt number safely
+            try {
+                const receiptNumberInput = document.getElementById('receiptNumber');
+                if (receiptNumberInput) {
+                    receiptNumberInput.value = '';
+                }
+            } catch (clearError) {
+                console.warn('Error clearing receipt number:', clearError);
+            }
+            
+            // Hide all special fields safely
+            try {
+                const taxFields = document.getElementById('taxFields');
+                const discountFields = document.getElementById('discountFields');
+                
+                if (taxFields) taxFields.style.display = 'none';
+                if (discountFields) discountFields.style.display = 'none';
+            } catch (hideError) {
+                console.warn('Error hiding fields:', hideError);
+            }
         }
         
-        // Update total calculation
-        updateTotal();
-    } else {
-        // Clear receipt number
-        const receiptNumberInput = document.getElementById('receiptNumber');
-        if (receiptNumberInput) {
-            receiptNumberInput.value = '';
-        }
-        
-        // Hide all special fields
-        const taxFields = document.getElementById('taxFields');
-        const discountFields = document.getElementById('discountFields');
-        
-        if (taxFields) taxFields.style.display = 'none';
-        if (discountFields) discountFields.style.display = 'none';
+    } catch (error) {
+        console.error('Error in onCompanyChange:', error);
     }
 }
 
@@ -201,112 +248,229 @@ async function generateReceiptNumber(companyCode) {
 }
 
 function onItemTypeChange(event) {
-    const itemType = event.target.value.toLowerCase();
-    const sizeInput = document.getElementById('itemSize');
-    
-    if (sizeInput) {
-        if (itemType.includes('terpal')) {
-            sizeInput.disabled = false;
-            sizeInput.value = ''; // Clear value when enabling
-        } else {
-            sizeInput.disabled = true;
-            sizeInput.value = '-'; // Set default value when disabling
+    try {
+        const itemType = event.target.value.toLowerCase();
+        const sizeInput = document.getElementById('itemSize');
+        
+        if (sizeInput) {
+            try {
+                if (itemType.includes('terpal')) {
+                    sizeInput.disabled = false;
+                    sizeInput.value = ''; // Clear value when enabling
+                } else {
+                    sizeInput.disabled = true;
+                    sizeInput.value = '-'; // Set default value when disabling
+                }
+            } catch (inputError) {
+                console.warn('Error updating size input:', inputError);
+            }
         }
+    } catch (error) {
+        console.error('Error in onItemTypeChange:', error);
     }
 }
 
 function addItem() {
-    const quantity = document.getElementById('itemQuantity').value;
-    const itemType = document.getElementById('itemType').value;
-    const size = document.getElementById('itemSize').value;
-    const color = document.getElementById('itemColor').value;
-    const unitPrice = parseFloat(document.getElementById('itemUnitPrice').value);
-    
-    // Validation
-    if (!quantity || !itemType || !unitPrice) {
-        window.NotaApp.showToast('Semua field harus diisi', 'warning');
-        return;
+    try {
+        const quantity = document.getElementById('itemQuantity').value;
+        const itemType = document.getElementById('itemType').value;
+        const size = document.getElementById('itemSize').value;
+        const color = document.getElementById('itemColor').value;
+        const unitPrice = parseFloat(document.getElementById('itemUnitPrice').value);
+        
+        // Validation
+        if (!quantity || !itemType || !unitPrice) {
+            if (window.NotaApp && window.NotaApp.showToast) {
+                window.NotaApp.showToast('Semua field harus diisi', 'warning');
+            }
+            return;
+        }
+        
+        // Calculate total price safely
+        let totalPrice = 0;
+        if (window.NotaApp && window.NotaApp.calculateItemTotal) {
+            totalPrice = window.NotaApp.calculateItemTotal(quantity, size, unitPrice);
+        } else {
+            // Fallback calculation
+            totalPrice = parseFloat(quantity) * parseFloat(unitPrice);
+        }
+        
+        // Create item object
+        const item = {
+            id: Date.now(), // Temporary ID
+            quantity,
+            item_type: itemType,
+            size: size || '-',
+            color: color || '-',
+            unit_price: unitPrice,
+            total_price: totalPrice
+        };
+        
+        // Add to items array
+        window.items.push(item);
+        
+        // Update table safely
+        try {
+            updateItemsTable();
+        } catch (tableError) {
+            console.warn('Table update error:', tableError);
+        }
+        
+        // Update total safely
+        try {
+            updateTotal();
+        } catch (totalError) {
+            console.warn('Total update error:', totalError);
+        }
+        
+        // Clear form safely
+        try {
+            clearItemForm();
+        } catch (clearError) {
+            console.warn('Form clear error:', clearError);
+        }
+        
+        // Show success message safely
+        if (window.NotaApp && window.NotaApp.showToast) {
+            window.NotaApp.showToast('Item berhasil ditambahkan', 'success');
+        }
+        
+    } catch (error) {
+        console.error('Error in addItem:', error);
+        if (window.NotaApp && window.NotaApp.showToast) {
+            window.NotaApp.showToast('Error saat menambah item', 'danger');
+        }
     }
-    
-    // Calculate total price
-    const totalPrice = window.NotaApp.calculateItemTotal(quantity, size, unitPrice);
-    
-    // Create item object
-    const item = {
-        id: Date.now(), // Temporary ID
-        quantity,
-        item_type: itemType,
-        size: size || '-',
-        color: color || '-',
-        unit_price: unitPrice,
-        total_price: totalPrice
-    };
-    
-    // Add to items array
-    window.items.push(item);
-    
-    // Update table
-    updateItemsTable();
-    
-    // Update total
-    updateTotal();
-    
-    // Clear form
-    clearItemForm();
-    
-    // Show success message
-    window.NotaApp.showToast('Item berhasil ditambahkan', 'success');
 }
 
 function updateItemsTable() {
-    const tbody = document.getElementById('itemsTableBody');
-    if (!tbody) return;
-    
-    tbody.innerHTML = '';
-    
-    window.items.forEach((item, index) => {
-        const row = document.createElement('tr');
-        row.innerHTML = `
-            <td>${item.quantity}</td>
-            <td>${item.item_type}</td>
-            <td>${item.size}</td>
-            <td>${item.color}</td>
-            <td>${window.NotaApp.formatCurrency(item.unit_price)}</td>
-            <td>${window.NotaApp.formatCurrency(item.total_price)}</td>
-            <td>
-                <button type="button" class="btn btn-danger btn-sm" onclick="removeItem(${index})">
-                    <i class="fas fa-trash"></i>
-                </button>
-            </td>
-        `;
-        tbody.appendChild(row);
-    });
+    try {
+        const tbody = document.getElementById('itemsTableBody');
+        if (!tbody) return;
+        
+        tbody.innerHTML = '';
+        
+        if (!window.items || !Array.isArray(window.items)) {
+            console.warn('Items array is not valid');
+            return;
+        }
+        
+        window.items.forEach((item, index) => {
+            try {
+                const row = document.createElement('tr');
+                
+                // Safe formatting
+                const unitPriceFormatted = window.NotaApp && window.NotaApp.formatCurrency ? 
+                    window.NotaApp.formatCurrency(item.unit_price) : 
+                    `Rp ${(item.unit_price || 0).toLocaleString('id-ID')}`;
+                    
+                const totalPriceFormatted = window.NotaApp && window.NotaApp.formatCurrency ? 
+                    window.NotaApp.formatCurrency(item.total_price) : 
+                    `Rp ${(item.total_price || 0).toLocaleString('id-ID')}`;
+                
+                row.innerHTML = `
+                    <td>${item.quantity || ''}</td>
+                    <td>${item.item_type || ''}</td>
+                    <td>${item.size || ''}</td>
+                    <td>${item.color || ''}</td>
+                    <td>${unitPriceFormatted}</td>
+                    <td>${totalPriceFormatted}</td>
+                    <td>
+                        <button type="button" class="btn btn-danger btn-sm" onclick="removeItem(${index})">
+                            <i class="fas fa-trash"></i>
+                        </button>
+                    </td>
+                `;
+                tbody.appendChild(row);
+            } catch (itemError) {
+                console.warn('Error creating item row:', itemError);
+            }
+        });
+    } catch (error) {
+        console.error('Error in updateItemsTable:', error);
+    }
 }
 
 function removeItem(index) {
-    window.items.splice(index, 1);
-    updateItemsTable();
-    updateTotal();
-    window.NotaApp.showToast('Item berhasil dihapus', 'info');
+    try {
+        if (!window.items || !Array.isArray(window.items)) {
+            console.warn('Items array is not valid');
+            return;
+        }
+        
+        if (index < 0 || index >= window.items.length) {
+            console.warn('Invalid index:', index);
+            return;
+        }
+        
+        window.items.splice(index, 1);
+        
+        // Update table safely
+        try {
+            updateItemsTable();
+        } catch (tableError) {
+            console.warn('Table update error:', tableError);
+        }
+        
+        // Update total safely
+        try {
+            updateTotal();
+        } catch (totalError) {
+            console.warn('Total update error:', totalError);
+        }
+        
+        // Show success message safely
+        if (window.NotaApp && window.NotaApp.showToast) {
+            window.NotaApp.showToast('Item berhasil dihapus', 'info');
+        }
+        
+    } catch (error) {
+        console.error('Error in removeItem:', error);
+        if (window.NotaApp && window.NotaApp.showToast) {
+            window.NotaApp.showToast('Error saat menghapus item', 'danger');
+        }
+    }
 }
 
 function clearItemForm() {
-    document.getElementById('itemQuantity').value = '';
-    document.getElementById('itemType').value = '';
-    document.getElementById('itemSize').value = '';
-    document.getElementById('itemColor').value = '';
-    document.getElementById('itemUnitPrice').value = '';
+    try {
+        const fields = [
+            'itemQuantity',
+            'itemType', 
+            'itemSize',
+            'itemColor',
+            'itemUnitPrice'
+        ];
+        
+        fields.forEach(fieldId => {
+            try {
+                const field = document.getElementById(fieldId);
+                if (field) {
+                    field.value = '';
+                }
+            } catch (fieldError) {
+                console.warn(`Error clearing field ${fieldId}:`, fieldError);
+            }
+        });
+        
+    } catch (error) {
+        console.error('Error in clearItemForm:', error);
+    }
 }
 
 function updateTotal() {
-    // Calculate subtotal
-    const subtotal = window.items.reduce((sum, item) => sum + item.total_price, 0);
-    
-    // Update subtotal display
-    const totalBeforeDiscount = document.getElementById('totalBeforeDiscount');
-    if (totalBeforeDiscount) {
-        totalBeforeDiscount.textContent = window.NotaApp.formatCurrency(subtotal);
-    }
+    try {
+        // Calculate subtotal safely
+        const subtotal = window.items.reduce((sum, item) => {
+            const itemTotal = parseFloat(item.total_price) || 0;
+            return sum + itemTotal;
+        }, 0);
+        
+        // Update subtotal display safely
+        const totalBeforeDiscount = document.getElementById('totalBeforeDiscount');
+        if (totalBeforeDiscount && window.NotaApp.formatCurrency) {
+            totalBeforeDiscount.textContent = window.NotaApp.formatCurrency(subtotal);
+        }
     
     if (currentCompany === 'CH') {
         // Tax calculation for CH company
@@ -352,6 +516,25 @@ function updateTotal() {
             remainingPaymentInput.value = remainingAmount;
         }
         
+        // Update summary display safely
+        try {
+            updateSummaryDisplay(subtotal, discountAmount, totalAfterDiscount, dpAmount, remainingAmount);
+        } catch (summaryError) {
+            console.warn('Summary display error:', summaryError);
+        }
+    }
+    } catch (error) {
+        console.error('Error in updateTotal:', error);
+        // Show error but don't break the app
+        if (window.NotaApp && window.NotaApp.showToast) {
+            window.NotaApp.showToast('Error saat update total', 'warning');
+        }
+    }
+}
+
+// Function to update summary display safely
+function updateSummaryDisplay(subtotal, discountAmount, totalAfterDiscount, dpAmount, remainingAmount) {
+    try {
         // Update discount fields
         const discountRow = document.getElementById('discountRow');
         const totalAfterDiscountRow = document.getElementById('totalAfterDiscountRow');
@@ -363,50 +546,101 @@ function updateTotal() {
         if (dpRow) dpRow.style.display = 'flex';
         if (remainingRow) remainingRow.style.display = 'flex';
         
-        // Update values
+        // Update values safely
         const discountAmountEl = document.getElementById('discountAmount');
         const totalAfterDiscountEl = document.getElementById('totalAfterDiscount');
         const dpAmountEl = document.getElementById('dpAmount');
         const remainingAmountEl = document.getElementById('remainingAmount');
         
-        if (discountAmountEl) discountAmountEl.textContent = window.NotaApp.formatCurrency(discountAmount);
-        if (totalAfterDiscountEl) totalAfterDiscountEl.textContent = window.NotaApp.formatCurrency(totalAfterDiscount);
-        if (dpAmountEl) dpAmountEl.textContent = window.NotaApp.formatCurrency(dpAmount);
-        if (remainingAmountEl) remainingAmountEl.textContent = window.NotaApp.formatCurrency(remainingAmount);
+        if (discountAmountEl && window.NotaApp.formatCurrency) {
+            discountAmountEl.textContent = window.NotaApp.formatCurrency(discountAmount);
+        }
+        if (totalAfterDiscountEl && window.NotaApp.formatCurrency) {
+            totalAfterDiscountEl.textContent = window.NotaApp.formatCurrency(totalAfterDiscount);
+        }
+        if (dpAmountEl && window.NotaApp.formatCurrency) {
+            dpAmountEl.textContent = window.NotaApp.formatCurrency(dpAmount);
+        }
+        if (remainingAmountEl && window.NotaApp.formatCurrency) {
+            remainingAmountEl.textContent = window.NotaApp.formatCurrency(remainingAmount);
+        }
+        
+    } catch (error) {
+        console.error('Error in updateSummaryDisplay:', error);
     }
 }
 
 async function handleFormSubmit(event) {
     event.preventDefault();
     
-    // Validate form
-    const formData = {
-        company_code: document.getElementById('companySelect').value,
-        recipient: document.getElementById('recipient').value,
-        date: document.getElementById('receiptDate').value
-    };
-    
-    const errors = window.NotaApp.validateForm(formData);
-    if (errors.length > 0) {
-        window.NotaApp.showToast(errors.join(', '), 'warning');
-        return;
-    }
-    
-    // Prepare data
-    const receiptData = {
-        receipt_number: currentReceiptNumber,
-        company_code: formData.company_code,
-        company_name: document.getElementById('companySelect').selectedOptions[0].text,
-        date: formData.date,
-        recipient: formData.recipient,
-        total_amount: parseFloat(document.getElementById('remainingAmount').textContent.replace(/[^\d]/g, '')),
-        items: window.items
-    };
-    
     try {
+        // Validate form
+        const formData = {
+            company_code: document.getElementById('companySelect').value,
+            recipient: document.getElementById('recipient').value,
+            date: document.getElementById('receiptDate').value
+        };
+        
+        const errors = window.NotaApp.validateForm(formData);
+        if (errors.length > 0) {
+            window.NotaApp.showToast(errors.join(', '), 'warning');
+            return;
+        }
+        
+        // Get remaining amount safely
+        const remainingAmountEl = document.getElementById('remainingAmount');
+        if (!remainingAmountEl) {
+            throw new Error('Element remainingAmount tidak ditemukan');
+        }
+        
+        // Check if it's an input field or text element
+        let currencyText;
+        if (remainingAmountEl.tagName === 'INPUT') {
+            // Input field - use value
+            currencyText = remainingAmountEl.value;
+        } else {
+            // Text element - use textContent
+            currencyText = remainingAmountEl.textContent;
+        }
+        
+        console.log('🔍 DEBUG Currency Parsing:', currencyText);
+        console.log('🔍 DEBUG Element Type:', remainingAmountEl.tagName);
+        
+        // Handle both formats: "24000" and "Rp 24.000,00"
+        let cleanText;
+        if (currencyText.includes('Rp')) {
+            // Format: "Rp 24.000,00" - remove "Rp " and replace dots
+            cleanText = currencyText.replace('Rp ', '').replace(/\./g, '').replace(',', '.');
+        } else {
+            // Format: "24000" - already clean
+            cleanText = currencyText;
+        }
+        
+        console.log('🔍 DEBUG Clean Text:', cleanText);
+        
+        const totalAmount = parseFloat(cleanText);
+        console.log('🔍 DEBUG Parsed Amount:', totalAmount);
+        
+        if (isNaN(totalAmount)) {
+            throw new Error(`Total amount tidak valid: "${currencyText}" → "${cleanText}" → ${totalAmount}`);
+        }
+        
+        // Prepare data
+        const receiptData = {
+            receipt_number: currentReceiptNumber,
+            company_code: formData.company_code,
+            company_name: document.getElementById('companySelect').selectedOptions[0].text,
+            date: formData.date,
+            recipient: formData.recipient,
+            total_amount: totalAmount,
+            items: window.items
+        };
+        
         // Show loading
         const submitBtn = event.target.querySelector('button[type="submit"]');
-        window.NotaApp.showLoading(submitBtn);
+        if (submitBtn) {
+            window.NotaApp.showLoading(submitBtn);
+        }
         
         // Send to API
         const response = await fetch('/api/receipts', {
@@ -426,58 +660,122 @@ async function handleFormSubmit(event) {
         // Success
         window.NotaApp.showToast('Nota berhasil disimpan!', 'success');
         
-        // Show success modal
-        const successModal = new bootstrap.Modal(document.getElementById('successModal'));
-        successModal.show();
+        // Show success modal safely
+        try {
+            const successModalEl = document.getElementById('successModal');
+            if (successModalEl) {
+                const successModal = new bootstrap.Modal(successModalEl);
+                successModal.show();
+            }
+        } catch (modalError) {
+            console.warn('Modal error:', modalError);
+            // Continue without modal
+        }
         
         // Clear form
         clearForm();
         
-        // Update stats
-        window.NotaApp.updateDatabaseStats();
+        // Update stats safely
+        try {
+            if (window.NotaApp.updateDatabaseStats) {
+                window.NotaApp.updateDatabaseStats();
+            }
+        } catch (statsError) {
+            console.warn('Stats update error:', statsError);
+        }
         
     } catch (error) {
         console.error('Error saving receipt:', error);
         window.NotaApp.showToast(`Error: ${error.message}`, 'danger');
     } finally {
-        // Hide loading
-        const submitBtn = event.target.querySelector('button[type="submit"]');
-        window.NotaApp.hideLoading(submitBtn);
+        // Hide loading safely
+        try {
+            const submitBtn = event.target.querySelector('button[type="submit"]');
+            if (submitBtn && window.NotaApp.hideLoading) {
+                window.NotaApp.hideLoading(submitBtn);
+            }
+        } catch (loadingError) {
+            console.warn('Loading hide error:', loadingError);
+        }
     }
 }
 
 function clearForm() {
-    // Clear form fields
-    document.getElementById('companySelect').value = '';
-    document.getElementById('receiptNumber').value = '';
-    document.getElementById('recipient').value = '';
-    document.getElementById('itemQuantity').value = '';
-    document.getElementById('itemType').value = '';
-    document.getElementById('itemSize').value = '';
-    document.getElementById('itemColor').value = '';
-    document.getElementById('itemUnitPrice').value = '';
-    
-    // Clear items
-    window.items = [];
-    updateItemsTable();
-    
-    // Reset totals
-    updateTotal();
-    
-    // Hide special fields
-    const taxFields = document.getElementById('taxFields');
-    const discountFields = document.getElementById('discountFields');
-    
-    if (taxFields) taxFields.style.display = 'none';
-    if (discountFields) discountFields.style.display = 'none';
-    
-    // Reset company
-    currentCompany = '';
-    currentReceiptNumber = '';
-    
-    // Set current date
-    const dateInput = document.getElementById('receiptDate');
-    if (dateInput) {
-        dateInput.value = new Date().toISOString().split('T')[0];
+    try {
+        // Clear form fields safely
+        const fields = [
+            'companySelect',
+            'receiptNumber',
+            'recipient',
+            'itemQuantity',
+            'itemType',
+            'itemSize',
+            'itemColor',
+            'itemUnitPrice'
+        ];
+        
+        fields.forEach(fieldId => {
+            try {
+                const field = document.getElementById(fieldId);
+                if (field) {
+                    field.value = '';
+                }
+            } catch (fieldError) {
+                console.warn(`Error clearing field ${fieldId}:`, fieldError);
+            }
+        });
+        
+        // Clear items safely
+        try {
+            window.items = [];
+        } catch (itemsError) {
+            console.warn('Error clearing items:', itemsError);
+        }
+        
+        // Update table safely
+        try {
+            updateItemsTable();
+        } catch (tableError) {
+            console.warn('Table update error:', tableError);
+        }
+        
+        // Reset totals safely
+        try {
+            updateTotal();
+        } catch (totalError) {
+            console.warn('Total update error:', totalError);
+        }
+        
+        // Hide special fields safely
+        try {
+            const taxFields = document.getElementById('taxFields');
+            const discountFields = document.getElementById('discountFields');
+            
+            if (taxFields) taxFields.style.display = 'none';
+            if (discountFields) discountFields.style.display = 'none';
+        } catch (fieldsError) {
+            console.warn('Error hiding fields:', fieldsError);
+        }
+        
+        // Reset company safely
+        try {
+            currentCompany = '';
+            currentReceiptNumber = '';
+        } catch (resetError) {
+            console.warn('Error resetting company:', resetError);
+        }
+        
+        // Set current date safely
+        try {
+            const dateInput = document.getElementById('receiptDate');
+            if (dateInput) {
+                dateInput.value = new Date().toISOString().split('T')[0];
+            }
+        } catch (dateError) {
+            console.warn('Error setting date:', dateError);
+        }
+        
+    } catch (error) {
+        console.error('Error in clearForm:', error);
     }
 }

@@ -174,34 +174,96 @@ def history():
 def setup():
     return render_template('setup.html', username=session.get('username'))
 
-@app.route('/api/receipts', methods=['GET'])
+@app.route('/api/receipts', methods=['GET', 'POST'])
 @require_login
-def get_receipts():
-    """Get all receipts or filter by company"""
-    try:
-        db = get_supabase()
-        if not db:
-            return jsonify({'error': 'Database not configured'}), 500
+def receipts_api():
+    """Handle GET and POST requests for receipts"""
+    if request.method == 'GET':
+        """Get all receipts or filter by company"""
+        try:
+            db = get_supabase()
+            if not db:
+                return jsonify({'error': 'Database not configured'}), 500
 
-        # Check if company filter is requested
-        company = request.args.get('company')
+            # Check if company filter is requested
+            company = request.args.get('company')
 
-        if company:
-            # Filter by company code
-            response = db.table('receipts').select('*').eq('company_code', company).order('created_at', desc=True).execute()
-        else:
-            # Get all receipts
-            response = db.table('receipts').select('*').order('created_at', desc=True).execute()
+            if company:
+                # Filter by company code
+                response = db.table('receipts').select('*').eq('company_code', company).order('created_at', desc=True).execute()
+            else:
+                # Get all receipts
+                response = db.table('receipts').select('*').order('created_at', desc=True).execute()
 
-        receipts = response.data if response.data else []
-        
-        return jsonify({
-            'receipts': receipts,
-            'total': len(receipts)
-        })
+            receipts = response.data if response.data else []
+            
+            return jsonify({
+                'receipts': receipts,
+                'total': len(receipts)
+            })
 
-    except Exception as e:
-        return jsonify({'error': str(e)}), 500
+        except Exception as e:
+            return jsonify({'error': str(e)}), 500
+    
+    elif request.method == 'POST':
+        """Create new receipt"""
+        try:
+            db = get_supabase()
+            if not db:
+                return jsonify({'error': 'Database not configured'}), 500
+
+            data = request.json
+            if not data:
+                return jsonify({'error': 'No data provided'}), 400
+
+            # Validate required fields
+            required_fields = ['receipt_number', 'company_code', 'company_name', 'date', 'recipient', 'total_amount']
+            for field in required_fields:
+                if not data.get(field):
+                    return jsonify({'error': f'Field {field} is required'}), 400
+
+            # Insert receipt
+            receipt_data = {
+                'receipt_number': data['receipt_number'],
+                'company_code': data['company_code'],
+                'company_name': data['company_name'],
+                'date': data['date'],
+                'recipient': data['recipient'],
+                'total_amount': data['total_amount'],
+                'created_at': datetime.now().isoformat()
+            }
+
+            receipt_response = db.table('receipts').insert(receipt_data).execute()
+            
+            if not receipt_response.data:
+                return jsonify({'error': 'Failed to create receipt'}), 500
+
+            receipt_id = receipt_response.data[0]['id']
+
+            # Insert items
+            if data.get('items') and isinstance(data['items'], list):
+                for item in data['items']:
+                    item_data = {
+                        'receipt_id': receipt_id,
+                        'quantity': item.get('quantity'),
+                        'item_type': item.get('item_type'),
+                        'size': item.get('size'),
+                        'color': item.get('color'),
+                        'unit_price': item.get('unit_price'),
+                        'total_price': item.get('total_price'),
+                        'created_at': datetime.now().isoformat()
+                    }
+                    db.table('items').insert(item_data).execute()
+
+            return jsonify({
+                'success': True,
+                'message': 'Receipt created successfully',
+                'receipt_id': receipt_id
+            })
+
+        except Exception as e:
+            print(f"Error creating receipt: {e}")
+            return jsonify({'error': str(e)}), 500
 
 @app.route('/api/receipts/<int:receipt_id>', methods=['GET'])
 @require_login
@@ -289,19 +351,43 @@ def generate_receipt_pdf(receipt, items, username, timestamp):
     
     # Function to add receipt content at specific Y position
     def add_receipt_content(start_y, page_type=""):
+        # Add logo for Compagre company (CP) at the top
+        if company_code == 'CP':
+            try:
+                # Add logo at the top center of each receipt
+                logo_path = "NotaPerusahaan_Web/static/images/logo compagre.JPG"
+                if os.path.exists(logo_path):
+                    # Draw logo at top center, above company name
+                    logo_width = 80  # Logo width in points
+                    logo_height = 60  # Logo height in points
+                    logo_x = (width - logo_width) / 2  # Center horizontally
+                    logo_y = start_y + 20  # Above company name
+                    
+                    c.drawImage(logo_path, logo_x, logo_y, logo_width, logo_height)
+                    
+                    # Move company name down to make room for logo
+                    company_y = start_y - 20
+                else:
+                    company_y = start_y
+            except Exception as e:
+                print(f"Error adding logo: {e}")
+                company_y = start_y
+        else:
+            company_y = start_y
+        
         # Add company name (larger font for better readability)
         c.setFont("Helvetica-Bold", 14)
-        c.drawString(50, start_y, company_name)
+        c.drawString(50, company_y, company_name)
         
         # Add receipt header
         c.setFont("Helvetica-Bold", 12)
-        c.drawString(50, start_y - 25, f"NOTA: {receipt['receipt_number']}")
+        c.drawString(50, company_y - 25, f"NOTA: {receipt['receipt_number']}")
         c.setFont("Helvetica", 10)
-        c.drawString(50, start_y - 45, f"Tanggal: {receipt['date']}")
-        c.drawString(50, start_y - 65, f"Kepada Yth: {receipt['recipient']}")
+        c.drawString(50, company_y - 45, f"Tanggal: {receipt['date']}")
+        c.drawString(50, company_y - 65, f"Kepada Yth: {receipt['recipient']}")
         
         # Add items table (better spacing)
-        y_position = start_y - 90
+        y_position = company_y - 90
         c.setFont("Helvetica-Bold", 9)
         c.drawString(50, y_position, "No")
         c.drawString(80, y_position, "Jenis Barang")
@@ -348,7 +434,7 @@ def generate_receipt_pdf(receipt, items, username, timestamp):
         # Add "Printed By" watermark (small but readable)
         c.setFont("Helvetica", 7)
         c.setFillColor(colors.grey)
-        c.drawString(50, start_y - 250, f"Printed By: {username} | {timestamp}")
+        c.drawString(50, company_y - 250, f"Printed By: {username} | {timestamp}")
     
     # Calculate positions for 2 receipts on 1 A4 page (like Excel template)
     receipt_height = 280  # Height needed for each receipt (more space)

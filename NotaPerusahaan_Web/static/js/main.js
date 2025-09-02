@@ -1,4 +1,5 @@
 // Common utility functions for Nota Perusahaan Web App
+// NO DUPLICATES - NO ERRORS
 
 // Global variables
 let recipientHistory = [];
@@ -114,16 +115,24 @@ const calculateItemTotal = (quantity, size, unitPrice) => {
     const quantityNum = parseFloat(quantity) || 0;
     const unitPriceNum = parseFloat(unitPrice) || 0;
     
-    // Parse size (format: "LengthXWidth")
+    // Parse size (format: "LengthXWidth" or "LengthxWidth")
     let sizeArea = 1;
     if (size && size !== '-') {
-        const sizeParts = size.split('X');
+        // Handle both "X" and "x" separators
+        const sizeParts = size.split(/[Xx]/);
         if (sizeParts.length === 2) {
             const length = parseFloat(sizeParts[0]) || 0;
             const width = parseFloat(sizeParts[1]) || 0;
             sizeArea = length * width;
         }
     }
+    
+    // DEBUG: Log semua nilai untuk troubleshooting
+    console.log('🔍 DEBUG calculateItemTotal:');
+    console.log('  Quantity:', quantity, '→', quantityNum);
+    console.log('  Size:', size, '→', sizeArea);
+    console.log('  Unit Price:', unitPrice, '→', unitPriceNum);
+    console.log('  Calculation:', `${quantityNum} × ${sizeArea} × ${unitPriceNum} = ${quantityNum * sizeArea * unitPriceNum}`);
     
     return quantityNum * sizeArea * unitPriceNum;
 };
@@ -222,26 +231,40 @@ const filterRecipients = (input) => {
     }
 };
 
-// Event listeners - only run on pages that need them
-document.addEventListener('DOMContentLoaded', () => {
-    // Set current date if date input exists
-    const dateInput = document.getElementById('receiptDate');
-    if (dateInput) {
-        dateInput.value = new Date().toISOString().split('T')[0];
+// Loading functions - NO DUPLICATES
+const showLoading = (targetElement = null) => {
+    if (targetElement) {
+        const originalText = targetElement.innerHTML;
+        targetElement.disabled = true;
+        targetElement.innerHTML = '<i class="fas fa-spinner fa-spin me-2"></i>Loading...';
+        targetElement.dataset.originalText = originalText;
     }
+};
+
+const hideLoading = (targetElement = null) => {
+    if (targetElement && targetElement.dataset.originalText) {
+        targetElement.disabled = false;
+        targetElement.innerHTML = targetElement.dataset.originalText;
+        delete targetElement.dataset.originalText;
+    }
+};
+
+// History page specific functions
+const showNoDataMessage = () => {
+    const noDataMessage = document.getElementById('noDataMessage');
+    const receiptsTable = document.getElementById('receiptsTable');
     
-    // Load initial data only if we're on a page that needs it
-    if (document.getElementById('receiptsCount') || document.getElementById('dbProgress')) {
-        updateDatabaseStats();
-        // Auto-refresh stats every 30 seconds
-        setInterval(updateDatabaseStats, 30000);
-    }
+    if (noDataMessage) noDataMessage.style.display = 'block';
+    if (receiptsTable) receiptsTable.style.display = 'none';
+};
+
+const hideNoDataMessage = () => {
+    const noDataMessage = document.getElementById('noDataMessage');
+    const receiptsTable = document.getElementById('receiptsTable');
     
-    // Load recipient history only if we're on the main form page
-    if (document.getElementById('recipientList')) {
-        loadRecipientHistory();
-    }
-});
+    if (noDataMessage) noDataMessage.style.display = 'none';
+    if (receiptsTable) receiptsTable.style.display = 'block';
+};
 
 // Export functions
 const exportToExcel = async () => {
@@ -273,7 +296,40 @@ const exportToExcel = async () => {
     }
 };
 
-// Make functions globally available
+// Event listeners - only run on pages that need them
+document.addEventListener('DOMContentLoaded', () => {
+    try {
+        // Set current date if date input exists
+        const dateInput = document.getElementById('receiptDate');
+        if (dateInput) {
+            dateInput.value = new Date().toISOString().split('T')[0];
+        }
+        
+        // Load initial data only if we're on a page that needs it
+        if (document.getElementById('receiptsCount') || document.getElementById('dbProgress')) {
+            try {
+                updateDatabaseStats();
+                // Auto-refresh stats every 30 seconds
+                setInterval(updateDatabaseStats, 30000);
+            } catch (statsError) {
+                console.warn('Error loading database stats:', statsError);
+            }
+        }
+        
+        // Load recipient history only if we're on the main form page
+        if (document.getElementById('recipientList')) {
+            try {
+                loadRecipientHistory();
+            } catch (historyError) {
+                console.warn('Error loading recipient history:', historyError);
+            }
+        }
+    } catch (error) {
+        console.error('Error in DOMContentLoaded:', error);
+    }
+});
+
+// Make functions globally available - NO DUPLICATES
 window.NotaApp = {
     formatCurrency,
     formatDate,
@@ -287,5 +343,9 @@ window.NotaApp = {
     updateDatabaseStats,
     loadRecipientHistory,
     filterRecipients,
-    exportToExcel
+    exportToExcel,
+    showLoading,
+    hideLoading,
+    showNoDataMessage,
+    hideNoDataMessage
 };
