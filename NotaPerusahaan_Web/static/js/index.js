@@ -587,34 +587,32 @@ async function handleFormSubmit(event) {
             return;
         }
         
-        // Get remaining amount safely
-        const remainingAmountEl = document.getElementById('remainingAmount');
-        if (!remainingAmountEl) {
-            throw new Error('Element remainingAmount tidak ditemukan');
+        // Get remaining amount safely - use the INPUT field, not the display element
+        const remainingPaymentEl = document.getElementById('remainingPayment');
+        if (!remainingPaymentEl) {
+            throw new Error('Element remainingPayment tidak ditemukan');
         }
         
-        // Check if it's an input field or text element
-        let currencyText;
-        if (remainingAmountEl.tagName === 'INPUT') {
-            // Input field - use value
-            currencyText = remainingAmountEl.value;
-        } else {
-            // Text element - use textContent
-            currencyText = remainingAmountEl.textContent;
-        }
+        // Input field - use value (this is the actual number, not formatted text)
+        const currencyText = remainingPaymentEl.value;
         
         console.log('🔍 DEBUG Currency Parsing:', currencyText);
-        console.log('🔍 DEBUG Element Type:', remainingAmountEl.tagName);
+        console.log('🔍 DEBUG Element Type: INPUT (remainingPayment)');
         
         // Handle both formats: "24000" and "Rp 24.000,00"
         let cleanText;
         if (currencyText.includes('Rp')) {
             // Format: "Rp 24.000,00" - remove "Rp " and replace dots
             cleanText = currencyText.replace('Rp ', '').replace(/\./g, '').replace(',', '.');
+            console.log('🔍 DEBUG After Rp removal:', cleanText);
         } else {
             // Format: "24000" - already clean
             cleanText = currencyText;
         }
+        
+        // Additional safety check - remove any remaining non-numeric characters except decimal point
+        cleanText = cleanText.replace(/[^\d.]/g, '');
+        console.log('🔍 DEBUG After final cleanup:', cleanText);
         
         console.log('🔍 DEBUG Clean Text:', cleanText);
         
