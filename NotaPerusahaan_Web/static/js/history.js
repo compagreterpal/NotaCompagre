@@ -12,38 +12,32 @@ let currentPage = 1;
 const itemsPerPage = 20;
 
 function initializeHistory() {
-    // Initialize variables
     allReceipts = [];
     filteredReceipts = [];
     currentPage = 1;
 }
 
 function setupEventListeners() {
-    // Search input
     const searchInput = document.getElementById('searchInput');
     if (searchInput) {
         searchInput.addEventListener('input', debounce(handleSearch, 300));
     }
     
-    // Company filter
     const companyFilter = document.getElementById('companyFilter');
     if (companyFilter) {
         companyFilter.addEventListener('change', handleFilter);
     }
     
-    // Date filter
     const dateFilter = document.getElementById('dateFilter');
     if (dateFilter) {
         dateFilter.addEventListener('change', handleFilter);
     }
     
-    // Clear filters button
     const clearFiltersBtn = document.getElementById('clearFiltersBtn');
     if (clearFiltersBtn) {
         clearFiltersBtn.addEventListener('click', clearFilters);
     }
     
-    // Export button
     const exportBtn = document.getElementById('exportBtn');
     if (exportBtn) {
         exportBtn.addEventListener('click', () => {
@@ -52,7 +46,6 @@ function setupEventListeners() {
         });
     }
     
-    // Confirm export button
     const confirmExportBtn = document.getElementById('confirmExportBtn');
     if (confirmExportBtn) {
         confirmExportBtn.addEventListener('click', handleExport);
@@ -91,7 +84,7 @@ async function loadReceipts() {
         
     } catch (error) {
         console.error('Error loading receipts:', error);
-        showError('Error saat memuat data nota');
+        window.NotaApp.showError('Error saat memuat data nota');
     } finally {
         hideLoading();
     }
@@ -99,21 +92,16 @@ async function loadReceipts() {
 
 function handleSearch() {
     const searchTerm = document.getElementById('searchInput').value.toLowerCase();
-    const companyFilter = document.getElementById('companyFilter').value;
-    const dateFilter = document.getElementById('dateFilter').value;
     
-    filteredReceipts = allReceipts.filter(receipt => {
-        const matchesSearch = !searchTerm || 
+    if (!searchTerm) {
+        filteredReceipts = [...allReceipts];
+    } else {
+        filteredReceipts = allReceipts.filter(receipt => 
             receipt.receipt_number.toLowerCase().includes(searchTerm) ||
             receipt.recipient.toLowerCase().includes(searchTerm) ||
-            receipt.company_name.toLowerCase().includes(searchTerm);
-        
-        const matchesCompany = !companyFilter || receipt.company_code === companyFilter;
-        
-        const matchesDate = !dateFilter || receipt.date === dateFilter;
-        
-        return matchesSearch && matchesCompany && matchesDate;
-    });
+            receipt.company_name.toLowerCase().includes(searchTerm)
+        );
+    }
     
     currentPage = 1;
     updateReceiptsTable();
@@ -122,7 +110,19 @@ function handleSearch() {
 }
 
 function handleFilter() {
-    handleSearch();
+    const companyFilter = document.getElementById('companyFilter').value;
+    const dateFilter = document.getElementById('dateFilter').value;
+    
+    filteredReceipts = allReceipts.filter(receipt => {
+        const companyMatch = !companyFilter || receipt.company_code === companyFilter;
+        const dateMatch = !dateFilter || receipt.date === dateFilter;
+        return companyMatch && dateMatch;
+    });
+    
+    currentPage = 1;
+    updateReceiptsTable();
+    updatePagination();
+    updateTotalCount();
 }
 
 function clearFilters() {
@@ -141,8 +141,6 @@ function updateReceiptsTable() {
     const tbody = document.getElementById('receiptsTableBody');
     if (!tbody) return;
     
-    tbody.innerHTML = '';
-    
     const startIndex = (currentPage - 1) * itemsPerPage;
     const endIndex = startIndex + itemsPerPage;
     const pageReceipts = filteredReceipts.slice(startIndex, endIndex);
@@ -152,39 +150,32 @@ function updateReceiptsTable() {
         return;
     }
     
-    pageReceipts.forEach((receipt, index) => {
+    tbody.innerHTML = '';
+    
+    pageReceipts.forEach(receipt => {
         const row = document.createElement('tr');
-        row.className = 'receipt-row';
-        row.setAttribute('data-receipt-id', receipt.id);
-        
         row.innerHTML = `
-            <td>${startIndex + index + 1}</td>
             <td>
-                <span class="badge bg-primary">${receipt.receipt_number}</span>
-            </td>
-            <td>
-                <span class="badge bg-secondary">${receipt.company_code}</span>
-                <br>
+                <strong>${receipt.receipt_number}</strong><br>
                 <small class="text-muted">${receipt.company_name}</small>
             </td>
-            <td>${formatDate(receipt.date)}</td>
+            <td>${window.NotaApp.formatDate(receipt.date)}</td>
             <td>${receipt.recipient}</td>
-            <td class="fw-bold">${formatCurrency(receipt.total_amount)}</td>
+            <td class="fw-bold">${window.NotaApp.formatCurrency(receipt.total_amount)}</td>
             <td>
                 <span class="badge bg-success">Tersimpan</span>
             </td>
             <td>
-                <div class="btn-group btn-group-sm">
+                <div class="btn-group btn-group-sm" role="group">
                     <button type="button" class="btn btn-outline-primary" onclick="viewReceiptDetails(${receipt.id})">
                         <i class="fas fa-eye"></i>
                     </button>
-                    <button type="button" class="btn btn-outline-success" onclick="printReceipt(${receipt.id})">
+                    <button type="button" class="btn btn-outline-secondary" onclick="printReceipt(${receipt.id})">
                         <i class="fas fa-print"></i>
                     </button>
                 </div>
             </td>
         `;
-        
         tbody.appendChild(row);
     });
     
@@ -193,71 +184,49 @@ function updateReceiptsTable() {
 
 function updatePagination() {
     const totalPages = Math.ceil(filteredReceipts.length / itemsPerPage);
-    const paginationNav = document.getElementById('paginationNav');
-    const paginationList = document.getElementById('paginationList');
+    const pagination = document.getElementById('pagination');
+    if (!pagination) return;
     
-    if (totalPages <= 1) {
-        paginationNav.style.display = 'none';
-        return;
-    }
+    pagination.innerHTML = '';
     
-    paginationNav.style.display = 'block';
-    paginationList.innerHTML = '';
+    if (totalPages <= 1) return;
     
     // Previous button
-    const prevLi = document.createElement('li');
-    prevLi.className = `page-item ${currentPage === 1 ? 'disabled' : ''}`;
-    prevLi.innerHTML = `
-        <a class="page-link" href="#" onclick="changePage(${currentPage - 1})">
-            <i class="fas fa-chevron-left"></i>
-        </a>
-    `;
-    paginationList.appendChild(prevLi);
+    const prevBtn = document.createElement('li');
+    prevBtn.className = `page-item ${currentPage === 1 ? 'disabled' : ''}`;
+    prevBtn.innerHTML = `<a class="page-link" href="#" onclick="changePage(${currentPage - 1})">Previous</a>`;
+    pagination.appendChild(prevBtn);
     
     // Page numbers
-    const startPage = Math.max(1, currentPage - 2);
-    const endPage = Math.min(totalPages, currentPage + 2);
-    
-    for (let i = startPage; i <= endPage; i++) {
-        const pageLi = document.createElement('li');
-        pageLi.className = `page-item ${i === currentPage ? 'active' : ''}`;
-        pageLi.innerHTML = `
-            <a class="page-link" href="#" onclick="changePage(${i})">${i}</a>
-        `;
-        paginationList.appendChild(pageLi);
+    for (let i = 1; i <= totalPages; i++) {
+        const pageBtn = document.createElement('li');
+        pageBtn.className = `page-item ${i === currentPage ? 'active' : ''}`;
+        pageBtn.innerHTML = `<a class="page-link" href="#" onclick="changePage(${i})">${i}</a>`;
+        pagination.appendChild(pageBtn);
     }
     
     // Next button
-    const nextLi = document.createElement('li');
-    nextLi.className = `page-item ${currentPage === totalPages ? 'disabled' : ''}`;
-    nextLi.innerHTML = `
-        <a class="page-link" href="#" onclick="changePage(${currentPage + 1})">
-            <i class="fas fa-chevron-right"></i>
-        </a>
-    `;
-    paginationList.appendChild(nextLi);
+    const nextBtn = document.createElement('li');
+    nextBtn.className = `page-item ${currentPage === totalPages ? 'disabled' : ''}`;
+    nextBtn.innerHTML = `<a class="page-link" href="#" onclick="changePage(${currentPage + 1})">Next</a>`;
+    pagination.appendChild(nextBtn);
 }
 
 function changePage(page) {
-    if (page < 1 || page > Math.ceil(filteredReceipts.length / itemsPerPage)) {
-        return;
-    }
+    const totalPages = Math.ceil(filteredReceipts.length / itemsPerPage);
+    if (page < 1 || page > totalPages) return;
     
     currentPage = page;
     updateReceiptsTable();
     updatePagination();
     
-    // Scroll to top of table
-    const table = document.getElementById('receiptsTable');
-    if (table) {
-        table.scrollIntoView({ behavior: 'smooth' });
-    }
+    window.scrollTo({ top: 0, behavior: 'smooth' });
 }
 
 function updateTotalCount() {
-    const totalReceipts = document.getElementById('totalReceipts');
-    if (totalReceipts) {
-        totalReceipts.textContent = `${filteredReceipts.length} nota`;
+    const totalCount = document.getElementById('totalCount');
+    if (totalCount) {
+        totalCount.textContent = filteredReceipts.length;
     }
 }
 
@@ -270,92 +239,73 @@ async function viewReceiptDetails(receiptId) {
             throw new Error(data.error);
         }
         
-        const receipt = data.receipt;
-        showReceiptDetailsModal(receipt);
+        showReceiptDetailsModal(data.receipt);
         
     } catch (error) {
         console.error('Error loading receipt details:', error);
-        showError('Error saat memuat detail nota');
+        window.NotaApp.showError('Error saat memuat detail nota');
     }
 }
 
 function showReceiptDetailsModal(receipt) {
-    const modalContent = document.getElementById('receiptDetailContent');
-    if (!modalContent) return;
+    const modal = document.getElementById('receiptDetailsModal');
+    if (!modal) return;
     
-    modalContent.innerHTML = `
-        <div class="row">
-            <div class="col-md-6">
-                <h6 class="text-primary">Informasi Nota</h6>
-                <table class="table table-sm">
-                    <tr>
-                        <td><strong>Nomor Nota:</strong></td>
-                        <td>${receipt.receipt_number}</td>
-                    </tr>
-                    <tr>
-                        <td><strong>Perusahaan:</strong></td>
-                        <td>${receipt.company_name}</td>
-                    </tr>
-                    <tr>
-                        <td><strong>Tanggal:</strong></td>
-                        <td>${formatDate(receipt.date)}</td>
-                    </tr>
-                    <tr>
-                        <td><strong>Penerima:</strong></td>
-                        <td>${receipt.recipient}</td>
-                    </tr>
-                    <tr>
-                        <td><strong>Total:</strong></td>
-                        <td class="fw-bold">${formatCurrency(receipt.total_amount)}</td>
-                    </tr>
-                </table>
-            </div>
-            <div class="col-md-6">
-                <h6 class="text-primary">Daftar Item</h6>
-                <div class="table-responsive">
-                    <table class="table table-sm table-bordered">
-                        <thead class="table-light">
-                            <tr>
-                                <th>Qty</th>
-                                <th>Jenis</th>
-                                <th>Ukuran</th>
-                                <th>Warna</th>
-                                <th>Harga Satuan</th>
-                                <th>Total</th>
-                            </tr>
-                        </thead>
-                        <tbody>
-                            ${receipt.items.map(item => `
-                                <tr>
-                                    <td>${item.quantity}</td>
-                                    <td>${item.item_type}</td>
-                                    <td>${item.size}</td>
-                                    <td>${item.color}</td>
-                                    <td>${formatCurrency(item.unit_price)}</td>
-                                    <td>${formatCurrency(item.total_price)}</td>
-                                </tr>
-                            `).join('')}
-                        </tbody>
-                    </table>
-                </div>
-            </div>
-        </div>
-    `;
+    // Update modal content
+    document.getElementById('modalReceiptNumber').textContent = receipt.receipt_number;
+    document.getElementById('modalCompanyName').textContent = receipt.company_name;
+    document.getElementById('modalDate').textContent = window.NotaApp.formatDate(receipt.date);
+    document.getElementById('modalRecipient').textContent = receipt.recipient;
+    document.getElementById('modalTotalAmount').textContent = window.NotaApp.formatCurrency(receipt.total_amount);
     
-    const modal = new bootstrap.Modal(document.getElementById('receiptDetailModal'));
-    modal.show();
+    // Update items table
+    const itemsTbody = document.getElementById('modalItemsTableBody');
+    if (itemsTbody && receipt.items) {
+        itemsTbody.innerHTML = receipt.items.map(item => `
+            <tr>
+                <td>${item.quantity}</td>
+                <td>${item.item_type}</td>
+                <td>${item.size}</td>
+                <td>${item.color}</td>
+                <td>${window.NotaApp.formatCurrency(item.unit_price)}</td>
+                <td>${window.NotaApp.formatCurrency(item.total_price)}</td>
+            </tr>
+        `).join('');
+    }
+    
+    // Show modal
+    const bootstrapModal = new bootstrap.Modal(modal);
+    bootstrapModal.show();
 }
 
 function printReceipt(receiptId) {
-    // For now, just show a message
-    // In the future, this could generate and print a PDF
-    showToast('Fitur print akan segera tersedia!', 'info');
+    try {
+        // Show loading
+        window.NotaApp.showToast('Membuat PDF...', 'info');
+        
+        // Download PDF
+        const link = document.createElement('a');
+        link.href = `/api/receipts/${receiptId}/pdf`;
+        link.download = `nota_${receiptId}.pdf`;
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+        
+        // Show success message
+        setTimeout(() => {
+            window.NotaApp.showToast('PDF berhasil dibuat dan didownload!', 'success');
+        }, 1000);
+        
+    } catch (error) {
+        console.error('Error generating PDF:', error);
+        window.NotaApp.showError('Error saat membuat PDF');
+    }
 }
 
 async function handleExport() {
     try {
         const confirmBtn = document.getElementById('confirmExportBtn');
-        window.NotaApp.showLoading(confirmBtn);
+        showLoading(confirmBtn);
         
         const response = await fetch('/api/export', {
             method: 'POST',
@@ -371,7 +321,7 @@ async function handleExport() {
         }
         
         // Success
-        showToast(data.message, 'success');
+        window.NotaApp.showToast(data.message, 'success');
         
         // Hide modal
         const exportModal = bootstrap.Modal.getInstance(document.getElementById('exportModal'));
@@ -386,46 +336,30 @@ async function handleExport() {
         
     } catch (error) {
         console.error('Error exporting data:', error);
-        showError(`Error saat export: ${error.message}`);
+        window.NotaApp.showError(`Error saat export: ${error.message}`);
     } finally {
         const confirmBtn = document.getElementById('confirmExportBtn');
-        window.NotaApp.hideLoading(confirmBtn);
+        hideLoading(confirmBtn);
     }
 }
 
 // Utility functions
-function formatCurrency(amount) {
-    return new Intl.NumberFormat('id-ID', {
-        style: 'currency',
-        currency: 'IDR',
-        minimumFractionDigits: 0,
-        maximumFractionDigits: 0
-    }).format(amount);
-}
-
-function formatDate(dateString) {
-    const date = new Date(dateString);
-    return date.toLocaleDateString('id-ID', {
-        year: 'numeric',
-        month: 'long',
-        day: 'numeric'
-    });
-}
-
-function showLoading() {
+function showLoading(targetElement = null) {
     const loadingSpinner = document.getElementById('loadingSpinner');
     const receiptsTable = document.getElementById('receiptsTable');
     
     if (loadingSpinner) loadingSpinner.style.display = 'block';
     if (receiptsTable) receiptsTable.style.display = 'none';
+    if (targetElement) targetElement.disabled = true;
 }
 
-function hideLoading() {
+function hideLoading(targetElement = null) {
     const loadingSpinner = document.getElementById('loadingSpinner');
     const receiptsTable = document.getElementById('receiptsTable');
     
     if (loadingSpinner) loadingSpinner.style.display = 'none';
     if (receiptsTable) receiptsTable.style.display = 'block';
+    if (targetElement) targetElement.disabled = false;
 }
 
 function showNoDataMessage() {
@@ -444,18 +378,6 @@ function hideNoDataMessage() {
     if (receiptsTable) receiptsTable.style.display = 'block';
 }
 
-function showError(message) {
-    if (window.NotaApp && window.NotaApp.showToast) {
-        window.NotaApp.showToast(message, 'danger');
-    } else {
-        alert(message);
-    }
-}
+// Using formatCurrency and formatDate from main.js
 
-function showToast(message, type = 'info') {
-    if (window.NotaApp && window.NotaApp.showToast) {
-        window.NotaApp.showToast(message, type);
-    } else {
-        alert(message);
-    }
-}
+// Using showError and showToast from main.js

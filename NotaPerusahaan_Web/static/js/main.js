@@ -1,17 +1,13 @@
-// Main JavaScript for Nota Perusahaan Web App
+// Common utility functions for Nota Perusahaan Web App
 
 // Global variables
-let currentReceiptNumber = '';
-let items = [];
 let recipientHistory = [];
 
 // Utility functions
 const formatCurrency = (amount) => {
     return new Intl.NumberFormat('id-ID', {
         style: 'currency',
-        currency: 'IDR',
-        minimumFractionDigits: 0,
-        maximumFractionDigits: 0
+        currency: 'IDR'
     }).format(amount);
 };
 
@@ -25,91 +21,114 @@ const formatDate = (dateString) => {
 };
 
 const showToast = (message, type = 'info') => {
-    // Create toast element
-    const toast = document.createElement('div');
-    toast.className = `toast align-items-center text-white bg-${type} border-0`;
-    toast.setAttribute('role', 'alert');
-    toast.setAttribute('aria-live', 'assertive');
-    toast.setAttribute('aria-atomic', 'true');
+    // Check if toast container exists
+    let toastContainer = document.getElementById('toastContainer');
     
-    toast.innerHTML = `
+    if (!toastContainer) {
+        // Create toast container if it doesn't exist
+        toastContainer = document.createElement('div');
+        toastContainer.id = 'toastContainer';
+        toastContainer.className = 'toast-container position-fixed top-0 end-0 p-3';
+        toastContainer.style.zIndex = '9999';
+        document.body.appendChild(toastContainer);
+    }
+    
+    // Create toast element
+    const toastElement = document.createElement('div');
+    toastElement.className = `toast align-items-center text-white bg-${type === 'danger' ? 'danger' : type === 'success' ? 'success' : type === 'warning' ? 'warning' : 'info'} border-0`;
+    toastElement.setAttribute('role', 'alert');
+    toastElement.setAttribute('aria-live', 'assertive');
+    toastElement.setAttribute('aria-atomic', 'true');
+    
+    toastElement.innerHTML = `
         <div class="d-flex">
             <div class="toast-body">
                 ${message}
             </div>
-            <button type="button" class="btn-close btn-close-white me-2 m-auto" data-bs-dismiss="toast"></button>
+            <button type="button" class="btn-btn-close btn-close-white me-2 m-auto" data-bs-dismiss="toast" aria-label="Close"></button>
         </div>
     `;
     
-    // Add to page
-    document.body.appendChild(toast);
+    // Add to container
+    toastContainer.appendChild(toastElement);
     
     // Show toast
-    const bsToast = new bootstrap.Toast(toast);
-    bsToast.show();
+    const toast = new bootstrap.Toast(toastElement);
+    toast.show();
     
-    // Remove after hidden
-    toast.addEventListener('hidden.bs.toast', () => {
-        document.body.removeChild(toast);
+    // Remove toast after it's hidden
+    toastElement.addEventListener('hidden.bs.toast', () => {
+        toastElement.remove();
     });
 };
 
-const showLoading = (element) => {
-    element.classList.add('loading');
-    element.disabled = true;
+const showError = (message) => {
+    showToast(message, 'danger');
 };
 
-const hideLoading = (element) => {
-    element.classList.remove('loading');
-    element.disabled = false;
+const showSuccess = (message) => {
+    showToast(message, 'success');
 };
 
-const validateForm = (formData) => {
+const showWarning = (message) => {
+    showToast(message, 'warning');
+};
+
+const showInfo = (message) => {
+    showToast(message, 'info');
+};
+
+// Form validation
+const validateForm = () => {
     const errors = [];
     
-    if (!formData.company_code) {
+    // Check required fields
+    const companySelect = document.getElementById('companySelect');
+    if (!companySelect || !companySelect.value) {
         errors.push('Perusahaan harus dipilih');
     }
     
-    if (!formData.recipient) {
-        errors.push('Penerima harus diisi');
-    }
-    
-    if (!formData.date) {
+    const dateInput = document.getElementById('receiptDate');
+    if (!dateInput || !dateInput.value) {
         errors.push('Tanggal harus diisi');
     }
     
-    if (items.length === 0) {
+    // Check if items exist
+    if (!window.items || window.items.length === 0) {
         errors.push('Minimal harus ada 1 item');
+    }
+    
+    // Check recipient
+    const recipientInput = document.getElementById('recipient');
+    if (!recipientInput || !recipientInput.value.trim()) {
+        errors.push('Kepada Yth harus diisi');
     }
     
     return errors;
 };
 
-const parseQuantity = (quantityStr) => {
-    // Handle "2" or "Dua (2) lbr" format
-    const match = quantityStr.match(/(\d+)/);
-    return match ? parseInt(match[1]) : 0;
-};
-
-const parseSize = (sizeStr) => {
-    // Handle "4X6" format
-    if (!sizeStr || sizeStr === '-') return 1;
+// Calculate item total
+const calculateItemTotal = (quantity, size, unitPrice) => {
+    if (!quantity || !size || !unitPrice) return 0;
     
-    const match = sizeStr.match(/(\d+)\s*[xX]\s*(\d+)/);
-    if (match) {
-        return parseInt(match[1]) * parseInt(match[2]);
+    const quantityNum = parseFloat(quantity) || 0;
+    const unitPriceNum = parseFloat(unitPrice) || 0;
+    
+    // Parse size (format: "LengthXWidth")
+    let sizeArea = 1;
+    if (size && size !== '-') {
+        const sizeParts = size.split('X');
+        if (sizeParts.length === 2) {
+            const length = parseFloat(sizeParts[0]) || 0;
+            const width = parseFloat(sizeParts[1]) || 0;
+            sizeArea = length * width;
+        }
     }
     
-    return 1;
+    return quantityNum * sizeArea * unitPriceNum;
 };
 
-const calculateItemTotal = (quantity, size, unitPrice) => {
-    const quantityNum = parseQuantity(quantity);
-    const sizeArea = parseSize(size);
-    return quantityNum * sizeArea * unitPrice;
-};
-
+// Update database stats safely
 const updateDatabaseStats = async () => {
     try {
         const response = await fetch('/api/stats');
@@ -120,14 +139,21 @@ const updateDatabaseStats = async () => {
             return;
         }
         
-        // Update UI
-        document.getElementById('receiptsCount').textContent = data.receipts_count;
-        document.getElementById('itemsCount').textContent = data.items_count;
+        // Safely update UI elements if they exist
+        const receiptsCountElement = document.getElementById('receiptsCount');
+        if (receiptsCountElement) {
+            receiptsCountElement.textContent = data.receipts_count;
+        }
         
-        // Update progress bar
-        const progress = (data.receipts_count / data.export_threshold) * 100;
+        const itemsCountElement = document.getElementById('itemsCount');
+        if (itemsCountElement) {
+            itemsCountElement.textContent = data.items_count;
+        }
+        
+        // Update progress bar if it exists
         const progressBar = document.getElementById('dbProgress');
         if (progressBar) {
+            const progress = (data.receipts_count / data.export_threshold) * 100;
             progressBar.style.width = `${Math.min(progress, 100)}%`;
             
             if (data.approaching_limit) {
@@ -144,6 +170,7 @@ const updateDatabaseStats = async () => {
     }
 };
 
+// Load recipient history safely
 const loadRecipientHistory = async () => {
     try {
         const response = await fetch('/api/receipts');
@@ -158,7 +185,7 @@ const loadRecipientHistory = async () => {
         const recipients = [...new Set(data.receipts.map(r => r.recipient))];
         recipientHistory = recipients;
         
-        // Update datalist
+        // Update datalist if it exists
         const datalist = document.getElementById('recipientList');
         if (datalist) {
             datalist.innerHTML = '';
@@ -174,13 +201,16 @@ const loadRecipientHistory = async () => {
     }
 };
 
+// Filter recipients safely
 const filterRecipients = (input) => {
+    if (!input) return;
+    
     const value = input.value.toLowerCase();
     const filtered = recipientHistory.filter(recipient => 
         recipient.toLowerCase().includes(value)
     );
     
-    // Update datalist
+    // Update datalist if it exists
     const datalist = document.getElementById('recipientList');
     if (datalist) {
         datalist.innerHTML = '';
@@ -192,20 +222,25 @@ const filterRecipients = (input) => {
     }
 };
 
-// Event listeners
+// Event listeners - only run on pages that need them
 document.addEventListener('DOMContentLoaded', () => {
-    // Set current date
+    // Set current date if date input exists
     const dateInput = document.getElementById('receiptDate');
     if (dateInput) {
         dateInput.value = new Date().toISOString().split('T')[0];
     }
     
-    // Load initial data
-    updateDatabaseStats();
-    loadRecipientHistory();
+    // Load initial data only if we're on a page that needs it
+    if (document.getElementById('receiptsCount') || document.getElementById('dbProgress')) {
+        updateDatabaseStats();
+        // Auto-refresh stats every 30 seconds
+        setInterval(updateDatabaseStats, 30000);
+    }
     
-    // Auto-refresh stats every 30 seconds
-    setInterval(updateDatabaseStats, 30000);
+    // Load recipient history only if we're on the main form page
+    if (document.getElementById('recipientList')) {
+        loadRecipientHistory();
+    }
 });
 
 // Export functions
@@ -221,100 +256,36 @@ const exportToExcel = async () => {
         const data = await response.json();
         
         if (data.error) {
-            showToast(data.error, 'danger');
-            return;
+            throw new Error(data.error);
         }
         
-        // Create download link
-        const link = document.createElement('a');
-        link.href = `data:application/vnd.openxmlformats-officedocument.spreadsheetml.sheet;base64,${btoa(data.filename)}`;
-        link.download = data.filename;
-        document.body.appendChild(link);
-        link.click();
-        document.body.removeChild(link);
+        // Success
+        showSuccess(data.message);
         
-        showToast(data.message, 'success');
-        
-        // Refresh stats
-        setTimeout(updateDatabaseStats, 1000);
+        // Reload page after export
+        setTimeout(() => {
+            window.location.reload();
+        }, 2000);
         
     } catch (error) {
         console.error('Error exporting data:', error);
-        showToast('Error saat export data', 'danger');
+        showError(`Error saat export: ${error.message}`);
     }
 };
 
-// Navigation functions
-const navigateTo = (url) => {
-    window.location.href = url;
-};
-
-// Common modal functions
-const showModal = (modalId) => {
-    const modal = new bootstrap.Modal(document.getElementById(modalId));
-    modal.show();
-};
-
-const hideModal = (modalId) => {
-    const modal = bootstrap.Modal.getInstance(document.getElementById(modalId));
-    if (modal) {
-        modal.hide();
-    }
-};
-
-// Error handling
-const handleError = (error, context = '') => {
-    console.error(`Error in ${context}:`, error);
-    showToast(`Error: ${error.message || error}`, 'danger');
-};
-
-// Success handling
-const handleSuccess = (message) => {
-    showToast(message, 'success');
-};
-
-// API helper functions
-const apiCall = async (url, options = {}) => {
-    try {
-        const response = await fetch(url, {
-            headers: {
-                'Content-Type': 'application/json',
-                ...options.headers
-            },
-            ...options
-        });
-        
-        const data = await response.json();
-        
-        if (!response.ok) {
-            throw new Error(data.error || `HTTP ${response.status}`);
-        }
-        
-        return data;
-    } catch (error) {
-        throw error;
-    }
-};
-
-// Export to global scope for use in other files
+// Make functions globally available
 window.NotaApp = {
     formatCurrency,
     formatDate,
     showToast,
-    showLoading,
-    hideLoading,
+    showError,
+    showSuccess,
+    showWarning,
+    showInfo,
     validateForm,
-    parseQuantity,
-    parseSize,
     calculateItemTotal,
     updateDatabaseStats,
     loadRecipientHistory,
     filterRecipients,
-    exportToExcel,
-    navigateTo,
-    showModal,
-    hideModal,
-    handleError,
-    handleSuccess,
-    apiCall
+    exportToExcel
 };

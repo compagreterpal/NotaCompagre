@@ -22,8 +22,8 @@
                             </label>
                             <select class="form-select" id="companySelect" required>
                                 <option value="">Pilih Perusahaan</option>
-                                {% for code, name in companies.items() %}
-                                <option value="{{ code }}">{{ name }}</option>
+                                {% for company in companies %}
+                                <option value="{{ company.code }}">{{ company.name }}</option>
                                 {% endfor %}
                             </select>
                         </div>
@@ -47,52 +47,23 @@
                             <label for="recipient" class="form-label">
                                 <i class="fas fa-user me-1"></i>Kepada Yth
                             </label>
-                            <input type="text" class="form-control" id="recipient" list="recipientList" required>
-                            <datalist id="recipientList"></datalist>
+                            <input type="text" class="form-control" id="recipient" placeholder="Nama Penerima" required>
                         </div>
                     </div>
 
-                    <!-- Tax Fields (Only for CH company) -->
-                    <div id="taxFields" class="row mb-3" style="display: none;">
-                        <div class="col-md-4">
+                    <!-- Tax Fields (for CH company) -->
+                    <div class="row mb-3" id="taxFields" style="display: none;">
+                        <div class="col-md-6">
                             <label for="dpp" class="form-label">
                                 <i class="fas fa-calculator me-1"></i>DPP
                             </label>
                             <input type="number" class="form-control" id="dpp" step="0.01" readonly>
                         </div>
-                        <div class="col-md-4">
+                        <div class="col-md-6">
                             <label for="ppn" class="form-label">
                                 <i class="fas fa-percentage me-1"></i>PPN (11%)
                             </label>
                             <input type="number" class="form-control" id="ppn" step="0.01" readonly>
-                        </div>
-                        <div class="col-md-4">
-                            <label for="totalWithTax" class="form-label">
-                                <i class="fas fa-money-bill me-1"></i>Total + PPN
-                            </label>
-                            <input type="number" class="form-control" id="totalWithTax" step="0.01" readonly>
-                        </div>
-                    </div>
-
-                    <!-- Discount and DP Fields (Only for non-CH companies) -->
-                    <div id="discountFields" class="row mb-3" style="display: none;">
-                        <div class="col-md-4">
-                            <label for="discount" class="form-label">
-                                <i class="fas fa-tags me-1"></i>Diskon (%/Rp)
-                            </label>
-                            <input type="text" class="form-control" id="discount" placeholder="10% atau 50000">
-                        </div>
-                        <div class="col-md-4">
-                            <label for="dp" class="form-label">
-                                <i class="fas fa-hand-holding-usd me-1"></i>DP
-                            </label>
-                            <input type="number" class="form-control" id="dp" step="0.01" placeholder="0">
-                        </div>
-                        <div class="col-md-4">
-                            <label for="remainingPayment" class="form-label">
-                                <i class="fas fa-credit-card me-1"></i>Sisa Perlu Bayar
-                            </label>
-                            <input type="number" class="form-control" id="remainingPayment" step="0.01" readonly>
                         </div>
                     </div>
 
@@ -105,10 +76,10 @@
                         <!-- Add Item Form -->
                         <div class="row g-2 mb-3">
                             <div class="col-md-2">
-                                <input type="text" class="form-control" id="itemQuantity" placeholder="Qty" required>
+                                <input type="text" class="form-control" id="itemQuantity" placeholder="Qty">
                             </div>
                             <div class="col-md-3">
-                                <input type="text" class="form-control" id="itemType" placeholder="Jenis Barang" required>
+                                <input type="text" class="form-control" id="itemType" placeholder="Jenis Barang">
                             </div>
                             <div class="col-md-2">
                                 <input type="text" class="form-control" id="itemSize" placeholder="Ukuran" disabled>
@@ -117,7 +88,7 @@
                                 <input type="text" class="form-control" id="itemColor" placeholder="Warna">
                             </div>
                             <div class="col-md-2">
-                                <input type="number" class="form-control" id="itemUnitPrice" placeholder="Harga Satuan" step="0.01" required>
+                                <input type="number" class="form-control" id="itemUnitPrice" placeholder="Harga Satuan" step="0.01">
                             </div>
                             <div class="col-md-1">
                                 <button type="button" class="btn btn-success btn-sm" id="addItemBtn">
@@ -146,6 +117,28 @@
                         </div>
                     </div>
 
+                    <!-- Payment Fields (for non-CH companies) -->
+                    <div class="row mb-3" id="discountFields" style="display: none;">
+                        <div class="col-md-4">
+                            <label for="discount" class="form-label">
+                                <i class="fas fa-tags me-1"></i>Diskon (%/Rp)
+                            </label>
+                            <input type="text" class="form-control" id="discount" placeholder="10% atau 50000">
+                        </div>
+                        <div class="col-md-4">
+                            <label for="dp" class="form-label">
+                                <i class="fas fa-hand-holding-usd me-1"></i>DP
+                            </label>
+                            <input type="number" class="form-control" id="dp" step="0.01" placeholder="0">
+                        </div>
+                        <div class="col-md-4">
+                            <label for="remainingPayment" class="form-label">
+                                <i class="fas fa-credit-card me-1"></i>Sisa Perlu Bayar
+                            </label>
+                            <input type="number" class="form-control" id="remainingPayment" step="0.01" readonly>
+                        </div>
+                    </div>
+
                     <!-- Total Section -->
                     <div class="row mb-3">
                         <div class="col-md-6 offset-md-6">
@@ -170,11 +163,6 @@
                                     <div class="row mb-2" id="remainingRow" style="display: none;">
                                         <div class="col-6">Sisa Perlu Bayar:</div>
                                         <div class="col-6 text-end" id="remainingAmount">Rp 0</div>
-                                    </div>
-                                    <hr>
-                                    <div class="row">
-                                        <div class="col-6 fw-bold">Total:</div>
-                                        <div class="col-6 text-end fw-bold" id="grandTotal">Rp 0</div>
                                     </div>
                                 </div>
                             </div>

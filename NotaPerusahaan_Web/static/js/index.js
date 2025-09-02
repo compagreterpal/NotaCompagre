@@ -144,24 +144,46 @@ function onCompanyChange(event) {
 
 async function generateReceiptNumber(companyCode) {
     try {
+        console.log('Generating receipt number for company:', companyCode);
+        
         // Get last receipt number for this company
         const response = await fetch(`/api/receipts?company=${companyCode}`);
+        console.log('API response:', response);
+        
+        if (!response.ok) {
+            throw new Error(`HTTP error! status: ${response.status}`);
+        }
+        
         const data = await response.json();
+        console.log('API data:', data);
         
         let nextNumber = 1;
         if (data.receipts && data.receipts.length > 0) {
             const lastReceipt = data.receipts[0];
-            const lastNumber = parseInt(lastReceipt.receipt_number.replace(companyCode, ''));
-            nextNumber = lastNumber + 1;
+            console.log('Last receipt:', lastReceipt);
+            
+            // Extract number from receipt_number (e.g., "CH00001" -> "00001" -> 1)
+            const lastNumberStr = lastReceipt.receipt_number.replace(companyCode, '');
+            const lastNumber = parseInt(lastNumberStr);
+            console.log('Last number:', lastNumber, 'from string:', lastNumberStr);
+            
+            if (!isNaN(lastNumber)) {
+                nextNumber = lastNumber + 1;
+            }
         }
         
         // Format: CH00001, CR00001, CP00001
         const formattedNumber = `${companyCode}${nextNumber.toString().padStart(5, '0')}`;
+        console.log('Generated number:', formattedNumber);
+        
         currentReceiptNumber = formattedNumber;
         
         const receiptNumberInput = document.getElementById('receiptNumber');
         if (receiptNumberInput) {
             receiptNumberInput.value = formattedNumber;
+            console.log('Receipt number input updated:', receiptNumberInput.value);
+        } else {
+            console.error('Receipt number input not found');
         }
         
     } catch (error) {
@@ -185,11 +207,10 @@ function onItemTypeChange(event) {
     if (sizeInput) {
         if (itemType.includes('terpal')) {
             sizeInput.disabled = false;
-            sizeInput.required = true;
+            sizeInput.value = ''; // Clear value when enabling
         } else {
             sizeInput.disabled = true;
-            sizeInput.required = false;
-            sizeInput.value = '-';
+            sizeInput.value = '-'; // Set default value when disabling
         }
     }
 }
@@ -287,27 +308,23 @@ function updateTotal() {
         totalBeforeDiscount.textContent = window.NotaApp.formatCurrency(subtotal);
     }
     
-    let finalTotal = subtotal;
-    
     if (currentCompany === 'CH') {
         // Tax calculation for CH company
         const dpp = subtotal;
         const ppn = dpp * 0.11;
-        finalTotal = dpp + ppn;
         
         // Update tax fields
         const dppInput = document.getElementById('dpp');
         const ppnInput = document.getElementById('ppn');
-        const totalWithTaxInput = document.getElementById('totalWithTax');
         
         if (dppInput) dppInput.value = dpp;
         if (ppnInput) ppnInput.value = ppn;
-        if (totalWithTaxInput) totalWithTaxInput.value = finalTotal;
         
     } else {
         // Discount and DP calculation for other companies
         const discountInput = document.getElementById('discount');
         const dpInput = document.getElementById('dp');
+        const remainingPaymentInput = document.getElementById('remainingPayment');
         
         let discountAmount = 0;
         let totalAfterDiscount = subtotal;
@@ -330,6 +347,11 @@ function updateTotal() {
         const dpAmount = dpInput ? (parseFloat(dpInput.value) || 0) : 0;
         const remainingAmount = totalAfterDiscount - dpAmount;
         
+        // Update remaining payment input field
+        if (remainingPaymentInput) {
+            remainingPaymentInput.value = remainingAmount;
+        }
+        
         // Update discount fields
         const discountRow = document.getElementById('discountRow');
         const totalAfterDiscountRow = document.getElementById('totalAfterDiscountRow');
@@ -351,14 +373,6 @@ function updateTotal() {
         if (totalAfterDiscountEl) totalAfterDiscountEl.textContent = window.NotaApp.formatCurrency(totalAfterDiscount);
         if (dpAmountEl) dpAmountEl.textContent = window.NotaApp.formatCurrency(dpAmount);
         if (remainingAmountEl) remainingAmountEl.textContent = window.NotaApp.formatCurrency(remainingAmount);
-        
-        finalTotal = remainingAmount;
-    }
-    
-    // Update grand total
-    const grandTotal = document.getElementById('grandTotal');
-    if (grandTotal) {
-        grandTotal.textContent = window.NotaApp.formatCurrency(finalTotal);
     }
 }
 
@@ -385,7 +399,7 @@ async function handleFormSubmit(event) {
         company_name: document.getElementById('companySelect').selectedOptions[0].text,
         date: formData.date,
         recipient: formData.recipient,
-        total_amount: parseFloat(document.getElementById('grandTotal').textContent.replace(/[^\d]/g, '')),
+        total_amount: parseFloat(document.getElementById('remainingAmount').textContent.replace(/[^\d]/g, '')),
         items: window.items
     };
     

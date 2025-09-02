@@ -1,196 +1,459 @@
-from flask import Flask, render_template, request, jsonify, redirect, url_for, flash
+from flask import Flask, render_template, request, jsonify, send_file, session, redirect, url_for
 from supabase import create_client, Client
-from datetime import datetime
-import json
-import os
 from config import Config
+import os
 import pandas as pd
-from io import BytesIO
-import base64
+from datetime import datetime
+import io
+from reportlab.lib.pagesizes import A4
+from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
+from reportlab.lib.units import mm
+from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer, Table, TableStyle
+from reportlab.lib import colors
+from reportlab.pdfgen import canvas
+from reportlab.lib.enums import TA_CENTER, TA_LEFT, TA_RIGHT
+import hashlib
+import secrets
 
 app = Flask(__name__)
 app.config.from_object(Config)
-
-# Initialize Supabase client
-supabase: Client = None
-if app.config['SUPABASE_URL'] and app.config['SUPABASE_KEY']:
-    supabase = create_client(app.config['SUPABASE_URL'], app.config['SUPABASE_KEY'])
+app.secret_key = app.config.get('SECRET_KEY', 'rahasia123456789')
 
 def get_supabase():
-    """Get Supabase client or return None if not configured"""
-    if not supabase:
+    """Get Supabase client"""
+    try:
+        if not app.config.get('SUPABASE_URL') or not app.config.get('SUPABASE_KEY'):
+            return None
+        
+        supabase: Client = create_client(
+            app.config['SUPABASE_URL'],
+            app.config['SUPABASE_KEY']
+        )
+        return supabase
+    except Exception as e:
+        print(f"Error connecting to Supabase: {e}")
         return None
-    return supabase
+
+def hash_password(password):
+    """Hash password using SHA-256"""
+    return hashlib.sha256(password.encode()).hexdigest()
+
+def require_login(f):
+    """Decorator to require login for protected routes"""
+    def decorated_function(*args, **kwargs):
+        if 'user_id' not in session:
+            return redirect(url_for('login'))
+        return f(*args, **kwargs)
+    decorated_function.__name__ = f.__name__
+    return decorated_function
 
 @app.route('/')
+@require_login
 def index():
-    """Main page with receipt form"""
-    companies = Config.COMPANIES
-    return render_template('index.html', companies=companies)
+    # Define companies data for the template
+    companies = [
+        {'code': 'CH', 'name': 'PT. CHASTE GEMILANG MANDIRI'},
+        {'code': 'CR', 'name': 'PT CREATIVE GLOBAL MULIA'},
+        {'code': 'CP', 'name': 'CV. COMPAGRE'}
+    ]
+    return render_template('index.html', companies=companies, username=session.get('username'))
+
+@app.route('/login', methods=['GET', 'POST'])
+def login():
+    if request.method == 'POST':
+        data = request.json
+        username = data.get('username')
+        password = data.get('password')
+        
+        if not username or not password:
+            return jsonify({'error': 'Username dan password harus diisi'}), 400
+        
+        try:
+            db = get_supabase()
+            if not db:
+                return jsonify({'error': 'Database not configured'}), 500
+            
+            # Check if users table exists, if not create it
+            try:
+                response = db.table('users').select('*').eq('username', username).execute()
+            except Exception as e:
+                print(f"Error accessing users table: {e}")
+                # For now, just return error - user needs to run setup_users_table.sql first
+                return jsonify({'error': 'Users table not found. Please run setup_users_table.sql in Supabase first.'}), 500
+            
+            if not response.data:
+                return jsonify({'error': 'Username tidak ditemukan'}), 401
+            
+            user = response.data[0]
+            hashed_password = hash_password(password)
+            
+            if user['password'] != hashed_password:
+                return jsonify({'error': 'Password salah'}), 401
+            
+            # Set session
+            session['user_id'] = user['id']
+            session['username'] = user['username']
+            session['full_name'] = user['full_name']
+            
+            return jsonify({'success': True, 'redirect': '/'})
+            
+        except Exception as e:
+            return jsonify({'error': str(e)}), 500
+    
+    return render_template('login.html')
+
+@app.route('/register', methods=['GET', 'POST'])
+def register():
+    if request.method == 'POST':
+        data = request.json
+        full_name = data.get('fullName')
+        username = data.get('username')
+        email = data.get('email')
+        password = data.get('password')
+        confirm_password = data.get('confirmPassword')
+        
+        # Validation
+        if not all([full_name, username, email, password, confirm_password]):
+            return jsonify({'error': 'Semua field harus diisi'}), 400
+        
+        if password != confirm_password:
+            return jsonify({'error': 'Password tidak cocok'}), 400
+        
+        if len(password) < 6:
+            return jsonify({'error': 'Password minimal 6 karakter'}), 400
+        
+        try:
+            db = get_supabase()
+            if not db:
+                return jsonify({'error': 'Database not configured'}), 500
+            
+            # Check if username already exists
+            existing_user = db.table('users').select('*').eq('username', username).execute()
+            if existing_user.data:
+                return jsonify({'error': 'Username sudah digunakan'}), 400
+            
+            # Check if email already exists
+            existing_email = db.table('users').select('*').eq('email', email).execute()
+            if existing_email.data:
+                return jsonify({'error': 'Email sudah digunakan'}), 400
+            
+            # Create user
+            hashed_password = hash_password(password)
+            user_data = {
+                'full_name': full_name,
+                'username': username,
+                'email': email,
+                'password': hashed_password,
+                'created_at': datetime.now().isoformat()
+            }
+            
+            result = db.table('users').insert(user_data).execute()
+            
+            if result.data:
+                return jsonify({'success': True, 'message': 'Akun berhasil dibuat! Silakan login.'})
+            else:
+                return jsonify({'error': 'Gagal membuat akun'}), 500
+                
+        except Exception as e:
+            return jsonify({'error': str(e)}), 500
+    
+    return render_template('register.html')
+
+@app.route('/logout')
+def logout():
+    session.clear()
+    return redirect(url_for('login'))
+
+@app.route('/history')
+@require_login
+def history():
+    return render_template('history.html', username=session.get('username'))
+
+@app.route('/setup')
+@require_login
+def setup():
+    return render_template('setup.html', username=session.get('username'))
 
 @app.route('/api/receipts', methods=['GET'])
+@require_login
 def get_receipts():
-    """Get all receipts from database"""
+    """Get all receipts or filter by company"""
     try:
         db = get_supabase()
         if not db:
             return jsonify({'error': 'Database not configured'}), 500
-        
-        response = db.table('receipts').select('*').order('created_at', desc=True).execute()
+
+        # Check if company filter is requested
+        company = request.args.get('company')
+
+        if company:
+            # Filter by company code
+            response = db.table('receipts').select('*').eq('company_code', company).order('created_at', desc=True).execute()
+        else:
+            # Get all receipts
+            response = db.table('receipts').select('*').order('created_at', desc=True).execute()
+
         receipts = response.data if response.data else []
         
-        return jsonify({'receipts': receipts})
-    except Exception as e:
-        return jsonify({'error': str(e)}), 500
+        return jsonify({
+            'receipts': receipts,
+            'total': len(receipts)
+        })
 
-@app.route('/api/receipts', methods=['POST'])
-def create_receipt():
-    """Create new receipt"""
-    try:
-        data = request.json
-        db = get_supabase()
-        
-        if not db:
-            return jsonify({'error': 'Database not configured'}), 500
-        
-        # Prepare receipt data
-        receipt_data = {
-            'receipt_number': data['receipt_number'],
-            'company_code': data['company_code'],
-            'company_name': data['company_name'],
-            'date': data['date'],
-            'recipient': data['recipient'],
-            'total_amount': data['total_amount'],
-            'created_at': datetime.now().isoformat()
-        }
-        
-        # Insert receipt
-        receipt_response = db.table('receipts').insert(receipt_data).execute()
-        receipt_id = receipt_response.data[0]['id'] if receipt_response.data else None
-        
-        if not receipt_id:
-            return jsonify({'error': 'Failed to create receipt'}), 500
-        
-        # Insert items
-        if data.get('items'):
-            items_data = []
-            for item in data['items']:
-                item_data = {
-                    'receipt_id': receipt_id,
-                    'quantity': item['quantity'],
-                    'item_type': item['item_type'],
-                    'size': item.get('size', '-'),
-                    'color': item.get('color', '-'),
-                    'unit_price': item['unit_price'],
-                    'total_price': item['total_price']
-                }
-                items_data.append(item_data)
-            
-            if items_data:
-                db.table('items').insert(items_data).execute()
-        
-        return jsonify({'success': True, 'receipt_id': receipt_id})
     except Exception as e:
         return jsonify({'error': str(e)}), 500
 
 @app.route('/api/receipts/<int:receipt_id>', methods=['GET'])
+@require_login
 def get_receipt(receipt_id):
-    """Get specific receipt with items"""
+    """Get a specific receipt with items"""
     try:
         db = get_supabase()
         if not db:
             return jsonify({'error': 'Database not configured'}), 500
-        
+
         # Get receipt
         receipt_response = db.table('receipts').select('*').eq('id', receipt_id).execute()
         if not receipt_response.data:
             return jsonify({'error': 'Receipt not found'}), 404
-        
+
         receipt = receipt_response.data[0]
-        
-        # Get items
+
+        # Get items for this receipt
         items_response = db.table('items').select('*').eq('receipt_id', receipt_id).execute()
         items = items_response.data if items_response.data else []
-        
+
         receipt['items'] = items
-        return jsonify({'receipt': receipt})
+
+        return jsonify({
+            'receipt': receipt
+        })
+
     except Exception as e:
         return jsonify({'error': str(e)}), 500
 
-@app.route('/api/export', methods=['POST'])
-def export_data():
-    """Export data to Excel and reset database"""
+@app.route('/api/receipts/<int:receipt_id>/pdf', methods=['GET'])
+@require_login
+def generate_pdf(receipt_id):
+    """Generate PDF for a receipt"""
     try:
         db = get_supabase()
         if not db:
             return jsonify({'error': 'Database not configured'}), 500
-        
-        # Get all data
-        receipts_response = db.table('receipts').select('*').execute()
-        items_response = db.table('items').select('*').execute()
-        
-        receipts = receipts_response.data if receipts_response.data else []
+
+        # Get receipt with items
+        receipt_response = db.table('receipts').select('*').eq('id', receipt_id).execute()
+        if not receipt_response.data:
+            return jsonify({'error': 'Receipt not found'}), 404
+
+        receipt = receipt_response.data[0]
+
+        # Get items
+        items_response = db.table('items').select('*').eq('receipt_id', receipt_id).execute()
         items = items_response.data if items_response.data else []
-        
-        # Create Excel file
-        with pd.ExcelWriter('exported_data.xlsx', engine='openpyxl') as writer:
-            # Export receipts
-            receipts_df = pd.DataFrame(receipts)
-            receipts_df.to_excel(writer, sheet_name='Receipts', index=False)
-            
-            # Export items
-            items_df = pd.DataFrame(items)
-            items_df.to_excel(writer, sheet_name='Items', index=False)
-        
-        # Reset database (delete all data)
-        db.table('items').delete().neq('id', 0).execute()
-        db.table('receipts').delete().neq('id', 0).execute()
-        
-        return jsonify({
-            'success': True, 
-            'message': f'Exported {len(receipts)} receipts and {len(items)} items',
-            'filename': 'exported_data.xlsx'
-        })
+
+        # Get current user info
+        current_user = session.get('username', 'Unknown')
+        current_time = datetime.now().strftime('%d/%m/%Y %H:%M')
+
+        # Generate PDF
+        pdf_buffer = generate_receipt_pdf(receipt, items, current_user, current_time)
+        pdf_buffer.seek(0)
+
+        # Generate filename
+        filename = f"nota_{receipt['receipt_number']}.pdf"
+
+        return send_file(
+            pdf_buffer,
+            as_attachment=True,
+            download_name=filename,
+            mimetype='application/pdf'
+        )
+
     except Exception as e:
         return jsonify({'error': str(e)}), 500
 
+def generate_receipt_pdf(receipt, items, username, timestamp):
+    """Generate PDF content for a receipt with 2 copies on 1 A4 page (like Excel template)"""
+    buffer = io.BytesIO()
+    
+    # Create canvas for single A4 page
+    c = canvas.Canvas(buffer, pagesize=A4)
+    width, height = A4
+    
+    # Company-specific styling
+    company_code = receipt['company_code']
+    is_ppn_company = company_code == 'CH'  # Only CH has PPN
+    company_name = receipt['company_name']
+    total_amount = receipt['total_amount']
+    
+    # Function to add receipt content at specific Y position
+    def add_receipt_content(start_y, page_type=""):
+        # Add company name (larger font for better readability)
+        c.setFont("Helvetica-Bold", 14)
+        c.drawString(50, start_y, company_name)
+        
+        # Add receipt header
+        c.setFont("Helvetica-Bold", 12)
+        c.drawString(50, start_y - 25, f"NOTA: {receipt['receipt_number']}")
+        c.setFont("Helvetica", 10)
+        c.drawString(50, start_y - 45, f"Tanggal: {receipt['date']}")
+        c.drawString(50, start_y - 65, f"Kepada Yth: {receipt['recipient']}")
+        
+        # Add items table (better spacing)
+        y_position = start_y - 90
+        c.setFont("Helvetica-Bold", 9)
+        c.drawString(50, y_position, "No")
+        c.drawString(80, y_position, "Jenis Barang")
+        c.drawString(180, y_position, "Ukuran")
+        c.drawString(250, y_position, "Warna")
+        c.drawString(300, y_position, "Qty")
+        c.drawString(350, y_position, "Harga Satuan")
+        c.drawString(450, y_position, "Total")
+        
+        y_position -= 20
+        c.setFont("Helvetica", 8)
+        if items:
+            for i, item in enumerate(items, 1):
+                c.drawString(50, y_position, str(i))
+                c.drawString(80, y_position, str(item['item_type'])[:20])  # Allow longer names
+                c.drawString(180, y_position, str(item['size'])[:15])
+                c.drawString(250, y_position, str(item['color'])[:15])
+                c.drawString(300, y_position, str(item['quantity']))
+                c.drawString(350, y_position, f"Rp {item['unit_price']:,.0f}")
+                c.drawString(450, y_position, f"Rp {item['total_price']:,.0f}")
+                y_position -= 18
+        
+        # Add totals (better formatting)
+        y_position -= 20
+        c.setFont("Helvetica-Bold", 10)
+        if is_ppn_company:
+            subtotal = total_amount / 1.11
+            ppn = total_amount - subtotal
+            c.drawString(350, y_position, f"Total Sebelum PPN: Rp {subtotal:,.0f}")
+            y_position -= 20
+            c.drawString(350, y_position, f"PPN (11%): Rp {ppn:,.0f}")
+            y_position -= 20
+            c.drawString(350, y_position, f"Total + PPN: Rp {total_amount:,.0f}")
+        else:
+            c.drawString(350, y_position, f"Total: Rp {total_amount:,.0f}")
+        
+        # Add signature (better spacing)
+        y_position -= 30
+        c.setFont("Helvetica", 10)
+        c.drawString(50, y_position, "Hormat Kami,")
+        y_position -= 25
+        c.drawString(50, y_position, "_________________")
+        
+        # Add "Printed By" watermark (small but readable)
+        c.setFont("Helvetica", 7)
+        c.setFillColor(colors.grey)
+        c.drawString(50, start_y - 250, f"Printed By: {username} | {timestamp}")
+    
+    # Calculate positions for 2 receipts on 1 A4 page (like Excel template)
+    receipt_height = 280  # Height needed for each receipt (more space)
+    margin_top = 40
+    spacing = 30  # Space between receipts
+    
+    # Receipt 1: Original (top half)
+    add_receipt_content(height - margin_top, "ORIGINAL")
+    
+    # Receipt 2: Copy (bottom half) - with red watermark
+    copy_y = height - margin_top - receipt_height - spacing
+    # Add red watermark
+    c.setFont("Helvetica-Bold", 60)
+    c.setFillColor(colors.red)
+    c.setFillAlpha(0.1)  # Slightly more visible
+    c.drawCentredString(width/2, copy_y - 120, "COPY")
+    c.setFillAlpha(1.0)  # Reset transparency
+    c.setFillColor(colors.black)
+    add_receipt_content(copy_y, "COPY")
+    
+    c.save()
+    buffer.seek(0)
+    
+    return buffer
+
 @app.route('/api/stats', methods=['GET'])
+@require_login
 def get_stats():
     """Get database statistics"""
     try:
         db = get_supabase()
         if not db:
             return jsonify({'error': 'Database not configured'}), 500
-        
-        # Count receipts
-        receipts_count = db.table('receipts').select('id', count='exact').execute()
-        receipts_total = receipts_count.count if hasattr(receipts_count, 'count') else 0
-        
-        # Count items
-        items_count = db.table('items').select('id', count='exact').execute()
-        items_total = items_count.count if hasattr(items_count, 'count') else 0
-        
-        # Check if approaching threshold
-        approaching_limit = receipts_total >= Config.EXPORT_THRESHOLD * 0.8
-        
+
+        # Get receipts count
+        receipts_response = db.table('receipts').select('*', count='exact').execute()
+        receipts_count = receipts_response.count if receipts_response.count else 0
+
+        # Get items count
+        items_response = db.table('items').select('*', count='exact').execute()
+        items_count = items_response.count if items_response.count else 0
+
+        # Export threshold
+        export_threshold = app.config.get('EXPORT_THRESHOLD', 1000)
+        approaching_limit = receipts_count >= (export_threshold * 0.8)
+
         return jsonify({
-            'receipts_count': receipts_total,
-            'items_count': items_total,
-            'export_threshold': Config.EXPORT_THRESHOLD,
+            'receipts_count': receipts_count,
+            'items_count': items_count,
+            'export_threshold': export_threshold,
             'approaching_limit': approaching_limit
         })
+
     except Exception as e:
         return jsonify({'error': str(e)}), 500
 
-@app.route('/history')
-def history():
-    """History page to view all receipts"""
-    return render_template('history.html')
+@app.route('/api/export', methods=['POST'])
+@require_login
+def export_data():
+    """Export data to Excel and reset database"""
+    try:
+        db = get_supabase()
+        if not db:
+            return jsonify({'error': 'Database not configured'}), 500
 
-@app.route('/setup')
-def setup():
-    """Setup page for database configuration"""
-    return render_template('setup.html')
+        # Get all receipts with items
+        receipts_response = db.table('receipts').select('*').execute()
+        receipts = receipts_response.data if receipts_response.data else []
+
+        items_response = db.table('items').select('*').execute()
+        items = items_response.data if items_response.data else []
+
+        if not receipts:
+            return jsonify({'error': 'No data to export'}), 400
+
+        # Create Excel file
+        timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
+        filename = f"nota_export_{timestamp}.xlsx"
+        
+        # Create DataFrame
+        df_receipts = pd.DataFrame(receipts)
+        df_items = pd.DataFrame(items)
+        
+        # Save to Excel
+        with pd.ExcelWriter(filename, engine='openpyxl') as writer:
+            df_receipts.to_excel(writer, sheet_name='Receipts', index=False)
+            df_items.to_excel(writer, sheet_name='Items', index=False)
+
+        # Delete all data from database
+        if items:
+            db.table('items').delete().neq('id', 0).execute()
+        
+        if receipts:
+            db.table('receipts').delete().neq('id', 0).execute()
+
+        # Clean up file
+        os.remove(filename)
+
+        return jsonify({
+            'message': f'Data berhasil diexport dan database direset! Total {len(receipts)} nota dan {len(items)} item.',
+            'filename': filename
+        })
+
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
 
 if __name__ == '__main__':
     app.run(debug=True, host='0.0.0.0', port=5000)
