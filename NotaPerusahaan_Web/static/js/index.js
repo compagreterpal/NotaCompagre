@@ -623,6 +623,9 @@ async function handleFormSubmit(event) {
             throw new Error(`Total amount tidak valid: "${currencyText}" → "${cleanText}" → ${totalAmount}`);
         }
         
+        // Get address
+        const address = document.getElementById('address').value;
+        
         // Prepare data
         const receiptData = {
             receipt_number: currentReceiptNumber,
@@ -630,6 +633,7 @@ async function handleFormSubmit(event) {
             company_name: document.getElementById('companySelect').selectedOptions[0].text,
             date: formData.date,
             recipient: formData.recipient,
+            address: address,
             total_amount: totalAmount,
             items: window.items
         };
@@ -705,6 +709,7 @@ function clearForm() {
             'companySelect',
             'receiptNumber',
             'recipient',
+            'address',
             'itemQuantity',
             'itemType',
             'itemSize',

@@ -176,16 +176,25 @@ function updateReceiptsTable() {
     
     tbody.innerHTML = '';
     
-    pageReceipts.forEach(receipt => {
+    pageReceipts.forEach((receipt, index) => {
         const row = document.createElement('tr');
+        const rowNumber = startIndex + index + 1;
+        
+        // Truncate address if too long
+        const address = receipt.address || '-';
+        const truncatedAddress = address.length > 30 ? address.substring(0, 30) + '...' : address;
+        
         row.innerHTML = `
+            <td>${rowNumber}</td>
             <td>
                 <strong>${receipt.receipt_number}</strong><br>
                 <small class="text-muted">${receipt.company_name}</small>
             </td>
-                            <td>${window.NotaApp && window.NotaApp.formatDate ? window.NotaApp.formatDate(receipt.date) : receipt.date}</td>
-                <td>${receipt.recipient}</td>
-                <td class="fw-bold">${window.NotaApp && window.NotaApp.formatCurrency ? window.NotaApp.formatCurrency(receipt.total_amount) : `Rp ${receipt.total_amount}`}</td>
+            <td>${receipt.company_name}</td>
+            <td>${window.NotaApp && window.NotaApp.formatDate ? window.NotaApp.formatDate(receipt.date) : receipt.date}</td>
+            <td>${receipt.recipient}</td>
+            <td title="${address}">${truncatedAddress}</td>
+            <td class="fw-bold">${window.NotaApp && window.NotaApp.formatCurrency ? window.NotaApp.formatCurrency(receipt.total_amount) : `Rp ${receipt.total_amount}`}</td>
             <td>
                 <span class="badge bg-success">Tersimpan</span>
             </td>
@@ -278,7 +287,7 @@ async function viewReceiptDetails(receiptId) {
 }
 
 function showReceiptDetailsModal(receipt) {
-    const modal = document.getElementById('receiptDetailsModal');
+    const modal = document.getElementById('receiptDetailModal');
     if (!modal) return;
     
     // Update modal content
@@ -286,6 +295,13 @@ function showReceiptDetailsModal(receipt) {
     document.getElementById('modalCompanyName').textContent = receipt.company_name;
     document.getElementById('modalDate').textContent = window.NotaApp && window.NotaApp.formatDate ? window.NotaApp.formatDate(receipt.date) : receipt.date;
     document.getElementById('modalRecipient').textContent = receipt.recipient;
+    
+    // Add address to modal if element exists
+    const modalAddress = document.getElementById('modalAddress');
+    if (modalAddress) {
+        modalAddress.textContent = receipt.address || '-';
+    }
+    
     document.getElementById('modalTotalAmount').textContent = window.NotaApp && window.NotaApp.formatCurrency ? window.NotaApp.formatCurrency(receipt.total_amount) : `Rp ${receipt.total_amount}`;
     
     // Update items table

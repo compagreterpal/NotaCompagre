@@ -217,7 +217,7 @@ def receipts_api():
                 return jsonify({'error': 'No data provided'}), 400
 
             # Validate required fields
-            required_fields = ['receipt_number', 'company_code', 'company_name', 'date', 'recipient', 'total_amount']
+            required_fields = ['receipt_number', 'company_code', 'company_name', 'date', 'recipient', 'address', 'total_amount']
             for field in required_fields:
                 if not data.get(field):
                     return jsonify({'error': f'Field {field} is required'}), 400
@@ -229,6 +229,7 @@ def receipts_api():
                 'company_name': data['company_name'],
                 'date': data['date'],
                 'recipient': data['recipient'],
+                'address': data['address'],
                 'total_amount': data['total_amount'],
                 'created_at': datetime.now().isoformat()
             }
@@ -386,8 +387,33 @@ def generate_receipt_pdf(receipt, items, username, timestamp):
         c.drawString(50, company_y - 45, f"Tanggal: {receipt['date']}")
         c.drawString(50, company_y - 65, f"Kepada Yth: {receipt['recipient']}")
         
-        # Add items table (better spacing)
-        y_position = company_y - 90
+        # Add address (with word wrapping)
+        address = receipt.get('address', '')
+        address_lines = []
+        if address:
+            # Split address into lines if too long
+            words = address.split()
+            current_line = ""
+            
+            for word in words:
+                if len(current_line + word) < 60:  # Max characters per line
+                    current_line += word + " "
+                else:
+                    if current_line:
+                        address_lines.append(current_line.strip())
+                    current_line = word + " "
+            
+            if current_line:
+                address_lines.append(current_line.strip())
+            
+            # Draw address lines
+            y_pos = company_y - 85
+            for line in address_lines:
+                c.drawString(50, y_pos, f"Alamat: {line}")
+                y_pos -= 15
+        
+        # Add items table (better spacing) - adjust for address
+        y_position = company_y - 90 - (len(address_lines) * 15)
         c.setFont("Helvetica-Bold", 9)
         c.drawString(50, y_position, "No")
         c.drawString(80, y_position, "Jenis Barang")

@@ -72,6 +72,7 @@
                                 <th>Perusahaan</th>
                                 <th>Tanggal</th>
                                 <th>Penerima</th>
+                                <th>Alamat</th>
                                 <th>Total</th>
                                 <th>Status</th>
                                 <th>Aksi</th>
@@ -123,7 +124,57 @@
                 <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
             </div>
             <div class="modal-body" id="receiptDetailContent">
-                <!-- Receipt details will be loaded here -->
+                <div class="row">
+                    <div class="col-md-6">
+                        <h6 class="text-primary">Informasi Nota</h6>
+                        <table class="table table-sm">
+                            <tr>
+                                <td><strong>Nomor Nota:</strong></td>
+                                <td id="modalReceiptNumber">-</td>
+                            </tr>
+                            <tr>
+                                <td><strong>Perusahaan:</strong></td>
+                                <td id="modalCompanyName">-</td>
+                            </tr>
+                            <tr>
+                                <td><strong>Tanggal:</strong></td>
+                                <td id="modalDate">-</td>
+                            </tr>
+                            <tr>
+                                <td><strong>Penerima:</strong></td>
+                                <td id="modalRecipient">-</td>
+                            </tr>
+                            <tr>
+                                <td><strong>Alamat:</strong></td>
+                                <td id="modalAddress">-</td>
+                            </tr>
+                            <tr>
+                                <td><strong>Total:</strong></td>
+                                <td id="modalTotalAmount" class="fw-bold">-</td>
+                            </tr>
+                        </table>
+                    </div>
+                    <div class="col-md-6">
+                        <h6 class="text-primary">Daftar Barang</h6>
+                        <div class="table-responsive">
+                            <table class="table table-sm table-bordered">
+                                <thead class="table-light">
+                                    <tr>
+                                        <th>Qty</th>
+                                        <th>Jenis</th>
+                                        <th>Ukuran</th>
+                                        <th>Warna</th>
+                                        <th>Harga</th>
+                                        <th>Total</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="modalItemsTableBody">
+                                    <!-- Items will be loaded here -->
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                </div>
             </div>
             <div class="modal-footer">
                 <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Tutup</button>
