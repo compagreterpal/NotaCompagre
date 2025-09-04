@@ -1,8 +1,14 @@
-import sys
-import os
-sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+from flask import Flask
 
-from app import app
+app = Flask(__name__)
+
+@app.route('/')
+def index():
+    return "Hello World! Aplikasi Nota Perusahaan berjalan!"
+
+@app.route('/test')
+def test():
+    return {"status": "success", "message": "API berfungsi!"}
 
 def handler(request):
     return app(request.environ, lambda *args: None)
