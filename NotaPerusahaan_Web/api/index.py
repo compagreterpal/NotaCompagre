@@ -1,4 +1,4 @@
-from flask import Flask
+from flask import Flask, jsonify
 
 app = Flask(__name__)
 
@@ -8,7 +8,8 @@ def index():
 
 @app.route('/test')
 def test():
-    return {"status": "success", "message": "API berfungsi!"}
+    return jsonify({"status": "success", "message": "API berfungsi!"})
 
-def handler(request):
-    return app(request.environ, lambda *args: None)
+# Export untuk Vercel
+if __name__ == "__main__":
+    app.run()
