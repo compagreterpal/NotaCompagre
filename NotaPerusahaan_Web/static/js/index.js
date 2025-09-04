@@ -587,40 +587,60 @@ async function handleFormSubmit(event) {
             return;
         }
         
-        // Get remaining amount safely - use the INPUT field, not the display element
-        const remainingPaymentEl = document.getElementById('remainingPayment');
-        if (!remainingPaymentEl) {
-            throw new Error('Element remainingPayment tidak ditemukan');
-        }
+        // Get total amount based on company type
+        let totalAmount = 0;
         
-        // Input field - use value (this is the actual number, not formatted text)
-        const currencyText = remainingPaymentEl.value;
-        
-        console.log('🔍 DEBUG Currency Parsing:', currencyText);
-        console.log('🔍 DEBUG Element Type: INPUT (remainingPayment)');
-        
-        // Handle both formats: "24000" and "Rp 24.000,00"
-        let cleanText;
-        if (currencyText.includes('Rp')) {
-            // Format: "Rp 24.000,00" - remove "Rp " and replace dots
-            cleanText = currencyText.replace('Rp ', '').replace(/\./g, '').replace(',', '.');
-            console.log('🔍 DEBUG After Rp removal:', cleanText);
+        if (currentCompany === 'CH') {
+            // For CHASTE company, calculate total with PPN (DPP + PPN)
+            const dppInput = document.getElementById('dpp');
+            const ppnInput = document.getElementById('ppn');
+            
+            if (!dppInput || !ppnInput) {
+                throw new Error('DPP atau PPN field tidak ditemukan untuk perusahaan CH');
+            }
+            
+            const dpp = parseFloat(dppInput.value) || 0;
+            const ppn = parseFloat(ppnInput.value) || 0;
+            totalAmount = dpp + ppn;
+            
+            console.log('🔍 DEBUG CH Company Total:', { dpp, ppn, totalAmount });
+            
         } else {
-            // Format: "24000" - already clean
-            cleanText = currencyText;
+            // For other companies, use remaining payment field
+            const remainingPaymentEl = document.getElementById('remainingPayment');
+            if (!remainingPaymentEl) {
+                throw new Error('Element remainingPayment tidak ditemukan');
+            }
+            
+            // Input field - use value (this is the actual number, not formatted text)
+            const currencyText = remainingPaymentEl.value;
+            
+            console.log('🔍 DEBUG Currency Parsing:', currencyText);
+            console.log('🔍 DEBUG Element Type: INPUT (remainingPayment)');
+            
+            // Handle both formats: "24000" and "Rp 24.000,00"
+            let cleanText;
+            if (currencyText.includes('Rp')) {
+                // Format: "Rp 24.000,00" - remove "Rp " and replace dots
+                cleanText = currencyText.replace('Rp ', '').replace(/\./g, '').replace(',', '.');
+                console.log('🔍 DEBUG After Rp removal:', cleanText);
+            } else {
+                // Format: "24000" - already clean
+                cleanText = currencyText;
+            }
+            
+            // Additional safety check - remove any remaining non-numeric characters except decimal point
+            cleanText = cleanText.replace(/[^\d.]/g, '');
+            console.log('🔍 DEBUG After final cleanup:', cleanText);
+            
+            console.log('🔍 DEBUG Clean Text:', cleanText);
+            
+            totalAmount = parseFloat(cleanText);
+            console.log('🔍 DEBUG Parsed Amount:', totalAmount);
         }
         
-        // Additional safety check - remove any remaining non-numeric characters except decimal point
-        cleanText = cleanText.replace(/[^\d.]/g, '');
-        console.log('🔍 DEBUG After final cleanup:', cleanText);
-        
-        console.log('🔍 DEBUG Clean Text:', cleanText);
-        
-        const totalAmount = parseFloat(cleanText);
-        console.log('🔍 DEBUG Parsed Amount:', totalAmount);
-        
-        if (isNaN(totalAmount)) {
-            throw new Error(`Total amount tidak valid: "${currencyText}" → "${cleanText}" → ${totalAmount}`);
+        if (isNaN(totalAmount) || totalAmount <= 0) {
+            throw new Error(`Total amount tidak valid: ${totalAmount}`);
         }
         
         // Get address

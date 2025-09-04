@@ -352,42 +352,53 @@ def generate_receipt_pdf(receipt, items, username, timestamp):
     
     # Function to add receipt content at specific Y position
     def add_receipt_content(start_y, page_type=""):
-        # Add logo for Compagre company (CP) at the top
-        if company_code == 'CP':
+        # Add logo for CHASTE company (top left)
+        if company_code == 'CH':
             try:
-                # Add logo at the top center of each receipt
-                logo_path = "NotaPerusahaan_Web/static/images/logo compagre.JPG"
-                if os.path.exists(logo_path):
-                    # Draw logo at top center, above company name
-                    logo_width = 80  # Logo width in points
-                    logo_height = 60  # Logo height in points
-                    logo_x = (width - logo_width) / 2  # Center horizontally
-                    logo_y = start_y + 20  # Above company name
+                possible_paths = [
+                    "static/images/CHASTE GEMILANG MANDIRI.png",
+                    "NotaPerusahaan_Web/static/images/CHASTE GEMILANG MANDIRI.png",
+                    "CHASTE GEMILANG MANDIRI.png"
+                ]
+                
+                logo_path = None
+                for path in possible_paths:
+                    if os.path.exists(path):
+                        logo_path = path
+                        break
+                
+                if logo_path:
+                    # Draw logo at top left
+                    logo_width = 50
+                    logo_height = 40
+                    logo_x = 50
+                    logo_y = start_y - 10  # At the top
                     
                     c.drawImage(logo_path, logo_x, logo_y, logo_width, logo_height)
                     
-                    # Move company name down to make room for logo
-                    company_y = start_y - 20
+                    # Company name below logo (rata kiri)
+                    company_x = 50
+                    company_y = logo_y - 20  # Below logo
                 else:
+                    company_x = 50
                     company_y = start_y
             except Exception as e:
-                print(f"Error adding logo: {e}")
+                print(f"Error adding CHASTE logo: {e}")
+                company_x = 50
                 company_y = start_y
         else:
+            company_x = 50
             company_y = start_y
         
-        # Add company name (larger font for better readability)
-        c.setFont("Helvetica-Bold", 14)
-        c.drawString(50, company_y, company_name)
-        
-        # Add receipt header
+        # Add company header (rata kiri dengan logo)
         c.setFont("Helvetica-Bold", 12)
-        c.drawString(50, company_y - 25, f"NOTA: {receipt['receipt_number']}")
+        c.drawString(50, company_y, company_name)
         c.setFont("Helvetica", 10)
-        c.drawString(50, company_y - 45, f"Tanggal: {receipt['date']}")
-        c.drawString(50, company_y - 65, f"Kepada Yth: {receipt['recipient']}")
+        c.drawString(50, company_y - 20, f"NOTA: {receipt['receipt_number']}")
+        c.drawString(50, company_y - 40, f"Tanggal: {receipt['date']}")
+        c.drawString(50, company_y - 60, f"Kepada Yth: {receipt['recipient']}")
         
-        # Add address (with word wrapping)
+        # Add address (with word wrapping and better spacing)
         address = receipt.get('address', '')
         address_lines = []
         if address:
@@ -406,14 +417,14 @@ def generate_receipt_pdf(receipt, items, username, timestamp):
             if current_line:
                 address_lines.append(current_line.strip())
             
-            # Draw address lines
-            y_pos = company_y - 85
+            # Draw address lines with better spacing
+            y_pos = start_y - 80
             for line in address_lines:
                 c.drawString(50, y_pos, f"Alamat: {line}")
-                y_pos -= 15
+                y_pos -= 18  # Better space between address lines
         
         # Add items table (better spacing) - adjust for address
-        y_position = company_y - 90 - (len(address_lines) * 15)
+        y_position = start_y - 100 - (len(address_lines) * 18)
         c.setFont("Helvetica-Bold", 9)
         c.drawString(50, y_position, "No")
         c.drawString(80, y_position, "Jenis Barang")
@@ -423,7 +434,7 @@ def generate_receipt_pdf(receipt, items, username, timestamp):
         c.drawString(350, y_position, "Harga Satuan")
         c.drawString(450, y_position, "Total")
         
-        y_position -= 20
+        y_position -= 25  # Better space before items
         c.setFont("Helvetica", 8)
         if items:
             for i, item in enumerate(items, 1):
@@ -434,44 +445,58 @@ def generate_receipt_pdf(receipt, items, username, timestamp):
                 c.drawString(300, y_position, str(item['quantity']))
                 c.drawString(350, y_position, f"Rp {item['unit_price']:,.0f}")
                 c.drawString(450, y_position, f"Rp {item['total_price']:,.0f}")
-                y_position -= 18
+                y_position -= 20  # Better space between items
         
-        # Add totals (better formatting)
-        y_position -= 20
+        # Add totals (better formatting with more space)
+        y_position -= 30  # Better space before totals
         c.setFont("Helvetica-Bold", 10)
         if is_ppn_company:
             subtotal = total_amount / 1.11
             ppn = total_amount - subtotal
             c.drawString(350, y_position, f"Total Sebelum PPN: Rp {subtotal:,.0f}")
-            y_position -= 20
+            y_position -= 25  # Better space between total lines
             c.drawString(350, y_position, f"PPN (11%): Rp {ppn:,.0f}")
-            y_position -= 20
+            y_position -= 25  # Better space between total lines
             c.drawString(350, y_position, f"Total + PPN: Rp {total_amount:,.0f}")
         else:
             c.drawString(350, y_position, f"Total: Rp {total_amount:,.0f}")
         
-        # Add signature (better spacing)
-        y_position -= 30
+        # Add signature (controlled space to not exceed separator line)
+        y_position -= 40  # Controlled space before signature
         c.setFont("Helvetica", 10)
         c.drawString(50, y_position, "Hormat Kami,")
-        y_position -= 25
+        y_position -= 30  # Controlled space for signature line (enough room but not too much)
         c.drawString(50, y_position, "_________________")
         
-        # Add "Printed By" watermark (small but readable)
-        c.setFont("Helvetica", 7)
-        c.setFillColor(colors.grey)
-        c.drawString(50, company_y - 250, f"Printed By: {username} | {timestamp}")
+        
+        # Add "Printed By" only to the COPY receipt (bottom right corner)
+        if page_type == "COPY":
+            c.setFont("Helvetica", 7)
+            c.setFillColor(colors.grey)
+            # Position at the very bottom right corner of copy receipt
+            printed_by_y = y_position - 20  # Below signature line
+            # Right align the text
+            printed_by_text = f"Printed By: {username} | {timestamp}"
+            text_width = c.stringWidth(printed_by_text, "Helvetica", 7)
+            printed_by_x = width - text_width - 50  # Right margin
+            c.drawString(printed_by_x, printed_by_y, printed_by_text)
+        
+        # Reset color back to black for next receipt
+        c.setFillColor(colors.black)
     
     # Calculate positions for 2 receipts on 1 A4 page (like Excel template)
-    receipt_height = 280  # Height needed for each receipt (more space)
-    margin_top = 40
-    spacing = 30  # Space between receipts
+    receipt_height = 300  # Height needed for each receipt (controlled to avoid collision)
+    margin_top = 50  # More margin from top
+    spacing = 60  # Perbesar jarak antara nota 1 dan 2
     
-    # Receipt 1: Original (top half)
-    add_receipt_content(height - margin_top, "ORIGINAL")
+    # Receipt 1: Original (top half) - with controlled margin to avoid collision
+    original_y = height - margin_top - 20  # Controlled extra margin for top receipt
+    add_receipt_content(original_y, "ORIGINAL")
     
-    # Receipt 2: Copy (bottom half) - with red watermark
-    copy_y = height - margin_top - receipt_height - spacing
+    # No separator line between receipts
+    
+    # Receipt 2: Copy (bottom half) - with red watermark and proper spacing
+    copy_y = original_y - receipt_height - spacing - 10  # Controlled spacing to avoid collision
     # Add red watermark
     c.setFont("Helvetica-Bold", 60)
     c.setFillColor(colors.red)
