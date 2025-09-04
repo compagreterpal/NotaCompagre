@@ -15,7 +15,7 @@ from reportlab.lib.enums import TA_CENTER, TA_LEFT, TA_RIGHT
 import hashlib
 import secrets
 
-app = Flask(__name__)
+app = Flask(__name__, static_folder='static', static_url_path='/static')
 app.config.from_object(Config)
 app.secret_key = app.config.get('SECRET_KEY', 'rahasia123456789')
 
